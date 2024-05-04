@@ -1,6 +1,6 @@
 ## LLM-IASD
 
-This repository contains the code for the course "Large Language Models/NLP" of [Master IASD](https://masteriasd.eu/) at [PSL University](https://psl.eu).
+This repository contains the code for the course LLM/NLP of [Master IASD](https://masteriasd.eu/) at [PSL University](https://psl.eu).
 
 ### STUDENTS
 - Quyen Linh TA
