@@ -64,15 +64,23 @@ Sure, here is a more professional and helper-like rewrite for that section:
 ## Usage
 
 To run the script, use the following command-line arguments to specify the dataset, model, tokenizer, and other
-hyperparameters. Below is an example command followed by a detailed description of each argument.
+hyperparameters. 
 
-### Example Command
+**Example**:
+
+Running with SST-2 Dataset and GPT-2 Model
 
 ```bash
-python main.py --dataset 1 --model gpt2 --tokenizer gpt2 --epochs 3 --batch_size 16 --learning_rate 0.0001 --rank 4
+python3 main.py --dataset 1 --model gpt2 --tokenizer gpt2 --epochs 3 --batch_size 16 --learning_rate 0.0001 --rank 4
 ```
 
-### Arguments
+Running with MRPC Dataset and LLaMA Model
+
+```bash
+python3 main.py --dataset 2 --model llama --tokenizer llama --epochs 5 --batch_size 32 --learning_rate 0.00005 --rank 4
+```
+
+**Arguments**:
 
 - `--dataset <DATASET_ID>`: Specifies the ID of the dataset to use. For example:
     - `1` for SST-2 (Stanford Sentiment Treebank)
@@ -95,17 +103,3 @@ python main.py --dataset 1 --model gpt2 --tokenizer gpt2 --epochs 3 --batch_size
 - `--learning_rate <LEARNING_RATE>`: Sets the learning rate for the optimizer. Example: `0.0001`.
 
 - `--rank <LORA_RANK>`: Specifies the rank for the Low-Rank Adaptation (LoRA). Example: `4`.
-
-**Example**:
-
-Running with SST-2 Dataset and GPT-2 Model
-
-```bash
-python3 main.py --dataset 1 --model gpt2 --tokenizer gpt2 --epochs 3 --batch_size 16 --learning_rate 0.0001 --rank 4
-```
-
-Running with MRPC Dataset and LLaMA Model
-
-```bash
-python3 main.py --dataset 2 --model llama --tokenizer llama --epochs 5 --batch_size 32 --learning_rate 0.00005 --rank 4
-```
