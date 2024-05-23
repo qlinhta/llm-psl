@@ -25,7 +25,6 @@ class LoRAEmbedding(nn.Module):
         self.lora_A = nn.Parameter(torch.randn(embedding.embedding_dim, rank))
         self.lora_B = nn.Parameter(torch.randn(rank, embedding.embedding_dim))
 
-        # Initialize LoRA parameters
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         nn.init.zeros_(self.lora_B)
 
