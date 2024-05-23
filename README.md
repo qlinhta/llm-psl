@@ -52,17 +52,6 @@ LoRA_Project/
 
 ## Usage
 
-The script can be run with various command-line arguments to specify the dataset, model, tokenizer, and other
-hyperparameters.
-
-```bash
-python main.py --dataset 1 --model gpt2 --tokenizer gpt2 --epochs 3 --batch_size 16 --learning_rate 0.0001 --rank 4
-```
-
-Sure, here is a more professional and helper-like rewrite for that section:
-
-## Usage
-
 To run the script, use the following command-line arguments to specify the dataset, model, tokenizer, and other
 hyperparameters.
 
