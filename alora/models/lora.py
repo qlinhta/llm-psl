@@ -10,7 +10,6 @@ class LoRALayer(nn.Module):
         self.lora_A = nn.Parameter(torch.randn(in_features, rank))
         self.lora_B = nn.Parameter(torch.randn(rank, out_features))
 
-        # Initialize LoRA parameters
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         nn.init.zeros_(self.lora_B)
 
@@ -37,7 +36,6 @@ class LoRAEmbedding(nn.Module):
 
 
 def apply(model, rank=4):
-    # Collect modules to replace in a list
     modules_to_replace = []
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear):
@@ -45,7 +43,6 @@ def apply(model, rank=4):
         elif isinstance(module, nn.Embedding):
             modules_to_replace.append((name, module, LoRAEmbedding(module, rank)))
 
-    # Replace modules
     for name, old_module, new_module in modules_to_replace:
         parent_module = model
         *path, last_name = name.split('.')
