@@ -5,7 +5,8 @@ DATASET_OPTIONS = {
     2: "glue",
     3: "glue",
     4: "glue",
-    5: "glue"
+    5: "glue",
+    6: "glue"
 }
 
 DATASET_NAMES = {
@@ -13,7 +14,8 @@ DATASET_NAMES = {
     2: "mrpc",
     3: "rte",
     4: "cola",
-    5: "stsb"
+    5: "stsb",
+    6: "tuetschek/e2e_nlg"
 }
 
 
