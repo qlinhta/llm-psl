@@ -22,6 +22,8 @@ DATASET_NAMES = {
 def download(id):
     if id not in DATASET_OPTIONS:
         raise ValueError(f"Dataset ID {id} is not defined.")
-
-    dataset = datasets.load_dataset(DATASET_OPTIONS[id], DATASET_NAMES[id])
+    if id != 6:
+      dataset = datasets.load_dataset(DATASET_OPTIONS[id], DATASET_NAMES[id])
+    else:
+      dataset = datasets.load_dataset(DATASET_NAMES[id])
     return dataset
