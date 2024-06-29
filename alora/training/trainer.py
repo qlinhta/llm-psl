@@ -14,11 +14,21 @@ def train(model, dataloader, epochs, learning_rate, device):
         epoch_loss = 0.0
 
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
+        
         for batch in progress_bar:
-            inputs = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-
+            input_ids, labels, attention_mask =  batch
+            inputs = input_ids.to(device)
+            labels = labels.to(device)
+            attention_mask = attention_mask.to(device)
+            # inputs = batch['input_ids'].to(device)
+            # labels = batch['labels'].to(device)
+            # attention_mask = batch['attention_mask'].to(device)
+        # for i, (inputs, labels, masks) in enumerate(dataloader):
+        #     # with torch.set_grad_enabled(True):
+        #     outputs = model(
+        #             input_ids=inputs,
+        #             attention_mask=masks,
+                # )
             optimizer.zero_grad()
             outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss

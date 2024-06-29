@@ -27,6 +27,7 @@ tokenizer = AutoTokenizer.from_pretrained(
     fast_tokenizer=True)
 block_size = 512
 device = torch.device("cuda")
+
 def fill_ignore_label(l, c):
     l[:len(c) - 1] = [-100] * (len(c) - 1)
     return l
@@ -66,7 +67,12 @@ def collate_batch(batch):
     inputs = torch.tensor(inputs, dtype=torch.int64).to(device)
     masks = torch.tensor(masks, dtype=torch.int64).to(device)
     labels = torch.tensor(labels, dtype=torch.int64).to(device)
+    # inputs = torch.tensor(inputs, dtype=torch.int64)
+    # masks = torch.tensor(masks, dtype=torch.int64)
+    # labels = torch.tensor(labels, dtype=torch.int64)
+    # dico = {"input_ids": inputs, "attention_mask":masks, "labels":labels}
     return inputs, labels, masks
+    # return dico
 
 def create_dataloader(dataset, batch_size=32):
     dataloader = DataLoader(
