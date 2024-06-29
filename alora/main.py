@@ -25,7 +25,7 @@ def main():
 
     dataset = download(args.dataset)
     dataset = preprocess(dataset, args.dataset)
-    tokenized_dataset = tokenize(dataset['train'], args.tokenizer)
+    tokenized_dataset = tokenize(dataset['train'], args.tokenizer)  # Use train split for tokenization
     train_dataloader = create_dataloader(tokenized_dataset, batch_size=args.batch_size)
 
     model = load(args.model)
@@ -33,7 +33,8 @@ def main():
 
     device = __device__()
 
-    model = train(model, train_dataloader, epochs=args.epochs, learning_rate=args.learning_rate, device=device)
+    model = train(model, train_dataloader, epochs=args.epochs, learning_rate=args.learning_rate, device=device,
+                  accumulation_steps=2)
 
     val_tokenized_dataset = tokenize(dataset['validation'], args.tokenizer)
     val_dataloader = create_dataloader(val_tokenized_dataset, batch_size=args.batch_size)

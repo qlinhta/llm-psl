@@ -4,7 +4,7 @@ from models.LLMs.other import get_other_model
 
 
 def load(model_name):
-    if 'gpt2' in model_name:
+    if 'gpt2' in model_name or 'distilgpt2' in model_name:
         model = get_gpt2_model(model_name)
     elif 'llama' in model_name:
         model = get_llama_model(model_name)

@@ -80,6 +80,8 @@ python3 main.py --dataset 2 --model llama --tokenizer llama --epochs 5 --batch_s
 
 - `--model <MODEL_NAME>`: The name of the pre-trained model to be used. Common examples include:
     - `gpt2` for GPT-2
+    - `distilgpt2` for a smaller, resource-efficient version of GPT-2
+    - `gpt2-medium`, `gpt2-large`, `gpt2-xl` for progressively larger versions of GPT-2
     - `llama` for LLaMA
 
 - `--tokenizer <TOKENIZER_NAME>`: The name of the tokenizer corresponding to the model. This should match the model
