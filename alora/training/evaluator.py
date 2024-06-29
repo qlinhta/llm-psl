@@ -1,8 +1,7 @@
 import torch
 from tqdm import tqdm
 import logging
-from training.evaluation import compute_metrics, compute_bleu, compute_rouge, compute_perplexity
-
+from training.evaluation import compute_bleu, compute_chrf, compute_cider,compute_lrouge,compute_meteor,compute_rouge, compute_perplexity
 
 def evaluate(model, dataloader, device, tokenizer):
     model.to(device)
@@ -20,23 +19,29 @@ def evaluate(model, dataloader, device, tokenizer):
             labels = labels.to(device)
             attention_mask = attention_mask.to(device)
             outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
-            print('//////////////////////////////////',outputs)
+  
             loss = outputs.loss
             logits = outputs.logits
 
             eval_loss += loss.item()
 
-            preds.extend(torch.argmax(logits, dim=-1).tolist())
-            labels_list.extend(labels.tolist())
+            predictions = torch.argmax(logits, dim=-1)
+            preds.extend(predictions.cpu().tolist())
+            labels_list.extend(labels.cpu().tolist())
 
             progress_bar.set_postfix(loss=eval_loss / (len(progress_bar)))
 
-    print('---------------------', preds)
-    print('**********************',labels_list)
-    bleu_score = compute_bleu(preds, labels_list, tokenizer)
-    rouge_scores = compute_rouge(preds, labels_list, tokenizer)
-    lrouge_scores = compute_lrouge(preds, labels_list, tokenizer)
-    cider_scores = compute_cider(preds, labels_list, tokenizer)
+    print('***************************', preds[1])
+    print('***************************', type(preds[0]))
+    preds_text = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
+    labels_text = [tokenizer.decode(label, skip_special_tokens=True) for label in labels_list]
+
+    print('--------------------- Predicted Texts:', preds_text)
+    print('********************** Ground Truth Texts:', labels_text)
+    bleu_score = compute_bleu(preds_text, labels_text)
+    rouge_scores = compute_bleu(preds_text, labels_text)
+    lrouge_scores = compute_lrouge(preds_text, labels_text)
+    cider_scores = compute_cider(preds_text, labels_text)
     chrf_scores = compute_chrf(preds, labels, tokenizer)
     meteor_scores = compute_meteor(preds, labels, tokenizer)
     perplexity = compute_perplexity(eval_loss, len(dataloader))

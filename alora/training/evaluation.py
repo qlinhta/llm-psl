@@ -15,32 +15,24 @@ def compute_metrics(preds, labels):
     return accuracy, precision, recall, f1
 
 
-def compute_bleu(preds, labels, tokenizer):
+def compute_bleu(preds, labels):
     bleu = evaluate.load('bleu')
-    preds_texts = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
-    labels_texts = [[tokenizer.decode(label, skip_special_tokens=True)] for label in labels]
-    results = bleu.compute(predictions=preds_texts, references=labels_texts)
+    results = bleu.compute(predictions=preds, references=labels)
     return results["bleu"]
 
-def compute_lrouge(preds, labels, tokenizer):
-    rouge = evaluate.load('rouge')
-    preds_texts = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
-    labels_texts = [tokenizer.decode(label, skip_special_tokens=True) for label in labels]
-    results = rouge.compute(predictions=preds_texts, references=labels_texts)
+def compute_lrouge(preds, labels):
+   
+    results = rouge.compute(predictions=preds, references=labels)
     return results["rougeL"].mid.fmeasure
 
-def compute_cider(preds, labels, tokenizer):
+def compute_cider(preds, labels):
     cider = evaluate.load("cider")
-    preds_texts = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
-    labels_texts = [tokenizer.decode(label, skip_special_tokens=True) for label in labels]
-    results = cider.compute(predictions=preds_texts, references=labels_texts)
+    results = cider.compute(predictions=preds, references=labels)
     return results["score"]
 
-def compute_rouge(preds, labels, tokenizer):
+def compute_rouge(preds, labels):
     rouge = Rouge()
-    preds_texts = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
-    labels_texts = [tokenizer.decode(label, skip_special_tokens=True) for label in labels]
-    scores = rouge.get_scores(preds_texts, labels_texts, avg=True)
+    scores = rouge.get_scores(preds, labels, avg=True)
     return scores
 
 def compute_meteor(preds, labels, tokenizer):
