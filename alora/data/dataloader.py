@@ -71,12 +71,15 @@ def collate_batch(batch):
     # masks = torch.tensor(masks, dtype=torch.int64)
     # labels = torch.tensor(labels, dtype=torch.int64)
     # dico = {"input_ids": inputs, "attention_mask":masks, "labels":labels}
+    
     return inputs, labels, masks
     # return dico
 
 def create_dataloader(dataset, batch_size=32):
+    
+    small_dataset = dataset.select(range(1000))
     dataloader = DataLoader(
-    dataset,
+    small_dataset,
     batch_size=batch_size,
     shuffle=True,
     collate_fn=collate_batch
