@@ -1,4 +1,5 @@
-torch~=2.4.0.dev20240503
+#torch~=2.4.0.dev20240503
+evaluate 
 transformers~=4.40.1
 datasets~=2.19.0
 tqdm~=4.66.4

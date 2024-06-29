@@ -7,7 +7,7 @@ import logging
 def train(model, dataloader, epochs, learning_rate, device):
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=model.config.pad_token_id)
+    #criterion = torch.nn.CrossEntropyLoss(ignore_index=model.config.pad_token_id)
 
     for epoch in range(epochs):
         model.train()
