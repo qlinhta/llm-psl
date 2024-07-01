@@ -2,8 +2,9 @@ import torch
 from tqdm import tqdm
 import logging
 from training.evaluation import compute_bleu, compute_chrf, compute_cider,compute_lrouge,compute_meteor,compute_rouge, compute_perplexity
-
-def evaluate(model, dataloader, device, tokenizer):
+from transformers import AutoTokenizer
+def evaluate(model, dataloader, device, tokenizer_name):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     model.to(device)
     model.eval()
     eval_loss = 0.0
@@ -24,7 +25,7 @@ def evaluate(model, dataloader, device, tokenizer):
             logits = outputs.logits
 
             eval_loss += loss.item()
-
+            print(logits.shape)
             predictions = torch.argmax(logits, dim=-1)
             preds.extend(predictions.cpu().tolist())
             labels_list.extend(labels.cpu().tolist())

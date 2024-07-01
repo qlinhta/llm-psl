@@ -25,8 +25,8 @@ def main():
 
     dataset = download(args.dataset)
     dataset = preprocess(dataset, args.dataset)
-    tokenized_dataset = tokenize(dataset['train'], args.tokenizer)
-    train_dataloader = create_dataloader(tokenized_dataset, batch_size=args.batch_size)
+    #tokenized_dataset = tokenize(dataset['train'], args.tokenizer)
+    train_dataloader = create_dataloader(dataset['train'], batch_size=args.batch_size)
 
     model = load(args.model)
     model = apply(model, rank=args.rank)
@@ -35,9 +35,9 @@ def main():
 
     model = train(model, train_dataloader, epochs=args.epochs, learning_rate=args.learning_rate, device=device)
 
-    val_tokenized_dataset = tokenize(dataset['validation'], args.tokenizer)
-    val_dataloader = create_dataloader(val_tokenized_dataset, batch_size=args.batch_size)
-    eval_loss = evaluate(model, val_dataloader, device=device, tokenizer=args.tokenizer)
+    #val_tokenized_dataset = tokenize(dataset['validation'], args.tokenizer)
+    val_dataloader = create_dataloader(dataset['validation'], batch_size=args.batch_size)
+    eval_loss = evaluate(model, val_dataloader, device=device, tokenizer_name=args.tokenizer)
     logger.info(f"Final Evaluation - Loss: {eval_loss:.4f}")
 
 
