@@ -48,7 +48,7 @@ def evaluate(model, dataloader, device, tokenizer_name):
             # outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
             result_token, eval_loss = generate_text(
                             model,
-                            input,
+                            inputs,
                             attention_mask,
                             eos_id,
                             20,
