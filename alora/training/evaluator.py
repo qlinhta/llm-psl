@@ -52,7 +52,7 @@ def evaluate(model, dataloader, device, tokenizer_name):
                             input,
                             attention_mask,
                             eos_id,
-                            pred_sequence_length=20
+                            pred_sequence_length=20,
                             labels_list,
                             tokenizer_name)
             print(tokenizer.decode(result_token[0]))
