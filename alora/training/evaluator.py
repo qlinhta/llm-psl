@@ -7,6 +7,7 @@ from transformers import AutoTokenizer
 def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, tokenizer):
     input = input.unsqueeze(0)
     mask = mask.unsqueeze(0)
+    print('inpuuuuut_shape', input.shape)
     eos_id = tokenizer.encode(tokenizer.eos_token)[0]
     predicted_last_id = -1
     start_token_len = torch.sum(mask).cpu().numpy()
