@@ -21,6 +21,8 @@ def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, toke
             loss = output.loss
             # eval_loss += loss.item()
             predicted_ids = torch.argmax(output.logits, axis=-1).cpu().numpy()
+            print('--------------------', predicted_ids)
+            print('$$$$$$$$$$$$$$$$$$$$', len(predicted_ids[0]))
             predicted_last_id = predicted_ids[0][token_len - 1]
             input[0][token_len] = predicted_last_id
             mask[0][token_len] = 1
