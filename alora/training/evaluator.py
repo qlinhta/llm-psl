@@ -4,8 +4,7 @@ import logging
 from training.evaluation import compute_bleu, compute_chrf, compute_cider,compute_lrouge,compute_meteor,compute_rouge, compute_perplexity
 from transformers import AutoTokenizer
 
-def generate_text(model, input, mask, eos_id, pred_sequence_length, labels_list, tokenizer_name):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, tokenizer):
     eos_id = tokenizer.encode(tokenizer.eos_token)[0]
     predicted_last_id = -1
     start_token_len = torch.sum(mask).cpu().numpy()
@@ -17,7 +16,7 @@ def generate_text(model, input, mask, eos_id, pred_sequence_length, labels_list,
             output = model(
                 input_ids=input,
                 attention_mask=mask,
-                labels=labels_list
+                labels=labels
             )
             loss = output.loss
             eval_loss += loss.item()
@@ -52,9 +51,9 @@ def evaluate(model, dataloader, device, tokenizer_name):
                             input,
                             attention_mask,
                             eos_id,
-                            pred_sequence_length=20,
-                            labels_list,
-                            tokenizer_name)
+                            20,
+                            labels,
+                            tokenizer)
             print(tokenizer.decode(result_token[0]))
             preds.extend(result_token[0].cpu().tolist())
             labels_list.extend(labels.cpu().tolist())
