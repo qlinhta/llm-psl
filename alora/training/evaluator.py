@@ -3,6 +3,32 @@ from tqdm import tqdm
 import logging
 from training.evaluation import compute_bleu, compute_chrf, compute_cider,compute_lrouge,compute_meteor,compute_rouge, compute_perplexity
 from transformers import AutoTokenizer
+
+def generate_text(model, input, mask, eos_id, pred_sequence_length, labels_list, tokenizer_name):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    eos_id = tokenizer.encode(tokenizer.eos_token)[0]
+    predicted_last_id = -1
+    start_token_len = torch.sum(mask).cpu().numpy()
+    token_len = start_token_len
+
+    with torch.no_grad():
+        while (predicted_last_id != eos_id) and \
+              (token_len - start_token_len < pred_sequence_length):
+            output = model(
+                input_ids=input,
+                attention_mask=mask,
+                labels=labels_list
+            )
+            loss = output.loss
+            eval_loss += loss.item()
+            predicted_ids = torch.argmax(output.logits, axis=-1).cpu().numpy()
+            predicted_last_id = predicted_ids[0][token_len - 1]
+            input[0][token_len] = predicted_last_id
+            mask[0][token_len] = 1
+            token_len = torch.sum(mask).cpu().numpy()
+    return input[:][start_token_len:], eval_loss
+
+
 def evaluate(model, dataloader, device, tokenizer_name):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     model.to(device)
@@ -19,15 +45,17 @@ def evaluate(model, dataloader, device, tokenizer_name):
             inputs = input_ids.to(device)
             labels = labels.to(device)
             attention_mask = attention_mask.to(device)
-            outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
-  
-            loss = outputs.loss
-            logits = outputs.logits
-
-            eval_loss += loss.item()
-            print(logits.shape)
-            predictions = torch.argmax(logits, dim=-1)
-            preds.extend(predictions.cpu().tolist())
+            # outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
+            result_token, eval_loss = generate_text(
+                            model,
+                            input,
+                            mask,
+                            eos_id,
+                            pred_sequence_length=20
+                            labels_list,
+                            tokenizer_name)
+            print(tokenizer.decode(result_token[0]))
+            preds.extend(result_token[0].cpu().tolist())
             labels_list.extend(labels.cpu().tolist())
 
             progress_bar.set_postfix(loss=eval_loss / (len(progress_bar)))
@@ -35,6 +63,7 @@ def evaluate(model, dataloader, device, tokenizer_name):
     print('***************************', preds[1])
     print('***************************', type(preds[0]))
     preds_text = [tokenizer.decode(pred, skip_special_tokens=True) for pred in preds]
+    print(preds_text[0])
     labels_text = [tokenizer.decode(label, skip_special_tokens=True) for label in labels_list]
 
     print('--------------------- Predicted Texts:', preds_text)
