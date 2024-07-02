@@ -5,8 +5,8 @@ from training.evaluation import compute_bleu, compute_chrf, compute_cider,comput
 from transformers import AutoTokenizer
 
 def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, tokenizer):
-    print('input au debut', input.shape)
-    print('mask', mask.shape)
+    input = input.unsqueeze(0)
+    mask = mask.unsqueeze(0)
     eos_id = tokenizer.encode(tokenizer.eos_token)[0]
     predicted_last_id = -1
     start_token_len = torch.sum(mask).cpu().numpy()
