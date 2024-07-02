@@ -1,5 +1,5 @@
 from data.downloader import download
-from data.preprocessor import preprocess
+from data.preprocessor import load_and_preprocess_data
 from data.dataloader import tokenize, create_dataloader
 from models.loader import load
 from models.lora import apply
@@ -23,8 +23,8 @@ def main():
     args = parse_args()
     logger = setup_logger('LoRA', 'training.log')
 
-    dataset = download(args.dataset)
-    dataset = preprocess(dataset, args.dataset)
+    dataset = load_and_preprocess_data(args.dataset, args.model)
+    #dataset = preprocess(dataset, args.dataset)
     #tokenized_dataset = tokenize(dataset['train'], args.tokenizer)
     train_dataloader = create_dataloader(dataset['train'], batch_size=args.batch_size)
 
