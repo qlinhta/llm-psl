@@ -30,7 +30,7 @@ def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, toke
             input[0][token_len] = predicted_last_id
             mask[0][token_len] = 1
             token_len = torch.sum(mask).cpu().numpy()
-    return input[:][start_token_len:], loss
+    return input[:][start_token_len-1:], loss
 
 
 def evaluate(model, dataloader, device, tokenizer_name):
@@ -62,6 +62,8 @@ def evaluate(model, dataloader, device, tokenizer_name):
                                 labels[i][:],
                                 tokenizer)
                 eval_loss += loss.item()
+                print("result", result_token)
+                print('shape result', result_token.shape)
                 print(tokenizer.decode(result_token[0]))
                 preds_one.extend(result_token[0].cpu().tolist())
             preds.extend(preds_one.cpu().tolist())
