@@ -46,16 +46,19 @@ def evaluate(model, dataloader, device, tokenizer_name):
             labels = labels.to(device)
             attention_mask = attention_mask.to(device)
             # outputs = model(input_ids=inputs, attention_mask=attention_mask, labels=labels)
-            result_token, eval_loss = generate_text(
-                            model,
-                            inputs,
-                            attention_mask,
-                            eos_id,
-                            20,
-                            labels,
-                            tokenizer)
-            print(tokenizer.decode(result_token[0]))
-            preds.extend(result_token[0].cpu().tolist())
+            preds_one = []
+            for i, in_sentence in enumerate(inputs):
+                result_token, eval_loss = generate_text(
+                                model,
+                                in_sentence,
+                                attention_mask[i][:],
+                                eos_id,
+                                20,
+                                labels[i][:],
+                                tokenizer)
+                print(tokenizer.decode(result_token[0]))
+                preds_one.extend(result_token[0].cpu().tolist())
+            preds.extend(preds_one.cpu().tolist())
             labels_list.extend(labels.cpu().tolist())
 
             progress_bar.set_postfix(loss=eval_loss / (len(progress_bar)))
