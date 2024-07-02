@@ -30,6 +30,7 @@ def generate_text(model, input, mask, eos_id, pred_sequence_length, labels, toke
             input[0][token_len] = predicted_last_id
             mask[0][token_len] = 1
             token_len = torch.sum(mask).cpu().numpy()
+    print('ennnnnnnnnnnnnnnnnd shape', input.shape)
     return input[:][start_token_len-1:], loss
 
 
