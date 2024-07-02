@@ -31,6 +31,7 @@ def generate_text(model, input, mask, eos_id, pred_sequence_length, labels_list,
 
 def evaluate(model, dataloader, device, tokenizer_name):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    eos_id = tokenizer.encode(tokenizer.eos_token)[0]
     model.to(device)
     model.eval()
     eval_loss = 0.0
@@ -49,7 +50,7 @@ def evaluate(model, dataloader, device, tokenizer_name):
             result_token, eval_loss = generate_text(
                             model,
                             input,
-                            mask,
+                            attention_mask,
                             eos_id,
                             pred_sequence_length=20
                             labels_list,
