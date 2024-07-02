@@ -17,6 +17,9 @@ def tokenize(dataset, tokenizer_name):
 
 
 def create_dataloader(dataset, batch_size=32):
-    dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    subset = dataset.select(range(1000))
+    # dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+    # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    subset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+    dataloader = DataLoader(subset, batch_size=batch_size, shuffle=True)
     return dataloader
