@@ -1,7 +1,11 @@
-torch~=2.4.0.dev20240503
-transformers~=4.40.1
-datasets~=2.19.0
-tqdm~=4.66.4
-scikit-learn~=1.4.2
+numpy~=1.26.4
+torch
 nltk~=3.8.1
+tqdm~=4.66.4
+transformers~=4.42.3
+prettytable~=3.10.0
+colorlog~=6.8.2
+datasets~=2.19.0
+evaluate~=0.4.2
+scikit-learn~=1.4.2
 rouge~=1.0.1
