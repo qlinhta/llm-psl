@@ -18,11 +18,18 @@ modularity and ease of use, allowing for easy downloading, preprocessing, and tr
 ## Usage
 
 **Model IDs:**
-- 1: GPT-2
-- 2: GPT-Medium
-- 3: GPT-Large
-- 4: GPT-XL
-- 5: DistilGPT-2
+
+| Model ID | Model Name       | # Parameters |
+|----------|------------------|--------------|
+| 1        | GPT-2            | 117M         |
+| 2        | GPT-Medium       | 345M         |
+| 3        | GPT-Large        | 762M         |
+| 4        | GPT-XL           | 1.5B         |
+| 5        | DistilGPT-2      | 82M          |
+| 6        | Meta-Llama-3-8B  | 8B           |
+| 7        | Meta-Llama-3-70B | 70B          |
+| 8        | Gemma-2-9B       | 9B           |
+| 9        | Gemma-2-27B      | 27B          |
 
 Running with GPT-2 Model on AG News Dataset:
 
