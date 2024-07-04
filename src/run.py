@@ -184,6 +184,7 @@ class LoRALinear(nn.Module):
 
 
 def integrate(model: nn.Module, lora_dim: int = 8) -> None:
+    number_of_lora_layers = 0
     for name, module in model.named_modules():
         if "attn.c_attn" in name:
             lora_layer = LoRALinear(
@@ -194,7 +195,8 @@ def integrate(model: nn.Module, lora_dim: int = 8) -> None:
             parent_name = ".".join(name.split(".")[:-1])
             parent_module = model.get_submodule(parent_name)
             parent_module.__setattr__(name.split(".")[-1], lora_layer)
-    logger.info(f"Integrated LoRA layers with dimension: {lora_dim}")
+            number_of_lora_layers += 1
+    logger.info(f"Integrated LoRA layers with dimension: {lora_dim} in {number_of_lora_layers} layers")
 
 
 def freeze(model: nn.Module) -> None:
@@ -221,7 +223,15 @@ def generate(model: nn.Module, query: str, max_length: int = 100, top_n: int = 1
 
 def main(args) -> None:
     global tokenizer
+
+    table = PrettyTable()
+    table.field_names = ["ID", "Model Name"]
+    for i in range(1, 10):
+        table.add_row([i, get_model_name(i)])
+    logger.info(f"\n{table}")
+
     model_name = get_model_name(args.model_id)
+    logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = "<PAD>"
     tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -239,6 +249,7 @@ def main(args) -> None:
 
     # lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
     try:
+        logger.info(f"Attempting to load model: {model_name}")
         lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
     except Exception as e:
         logger.error(f"Failed to load model from Hugging Face: {e}. Attempting to load from local safetensors.")
