@@ -1,5 +1,8 @@
+import os
 import argparse
+import time
 import numpy as np
+import pandas as pd
 import math
 import warnings
 
@@ -17,7 +20,21 @@ from torch.cuda.amp import GradScaler, autocast
 import logging
 from colorlog import ColoredFormatter
 from datasets import load_dataset
+import matplotlib.pyplot as plt
 from evaluation import compute_bleu, compute_rouge, compute_chrf, compute_perplexity
+
+plt.style.use('default')
+plt.rc('text', usetex=True)
+plt.rc('font', family='sans-serif')
+plt.rc('font', size=14)
+plt.rc('axes', titlesize=14)
+plt.rc('axes', labelsize=14)
+plt.rc('xtick', labelsize=12)
+plt.rc('ytick', labelsize=12)
+plt.rc('legend', fontsize=14)
+plt.rc('lines', markersize=7)
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def setup_logger(name):
@@ -45,7 +62,16 @@ def setup_logger(name):
 
 logger = setup_logger(__name__)
 
-model_name = "gpt2-medium"
+
+def get_model_name(model_id):
+    model_mapping = {
+        1: "gpt2",
+        2: "gpt2-medium",
+        3: "gpt2-large",
+        4: "gpt2-xl",
+        5: "distilgpt2"
+    }
+    return model_mapping.get(model_id, "gpt2")
 
 
 def device() -> torch.device:
@@ -83,11 +109,14 @@ def params(model: nn.Module) -> None:
 
 
 def train(model: nn.Module, dataset: Dataset, epochs: int = 1, batch_size: int = 8, learning_rate: float = 1e-5,
-          grad_accum_steps: int = 4) -> None:
+          grad_accum_steps: int = 4) -> list:
+    global avg_loss
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     scaler = GradScaler() if device.type == 'cuda' else None
     model.train()
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    losses = []
 
     for epoch in range(epochs):
         logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {learning_rate}")
@@ -117,6 +146,9 @@ def train(model: nn.Module, dataset: Dataset, epochs: int = 1, batch_size: int =
 
             avg_loss = running_loss / (idx + 1)
             progress_bar.set_postfix({'Loss': f"{loss.item() * grad_accum_steps:.4f}", 'Avg Loss': f"{avg_loss:.4f}"})
+        losses.append(avg_loss)
+
+    return losses
 
 
 class LoRALinear(nn.Module):
@@ -175,22 +207,29 @@ def generate(model: nn.Module, query: str, max_length: int = 100, top_n: int = 1
 
 def main(args) -> None:
     global tokenizer
+    model_name = get_model_name(args.model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = "<PAD>"
     tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    dataset = load_dataset('csv', data_files={'train': args.train_file, 'test': args.test_file})
-    train_dataset = TextDataset(dataset['train']['Description'][:100])
-    test_dataset = TextDataset(dataset['test']['Description'][:10])
+    train_df = pd.read_csv(args.train_file)
+    test_df = pd.read_csv(args.test_file)
+
+    train_texts = train_df['Description'][:100].tolist()
+    test_texts = test_df['Description'][:10].tolist()
+
+    train_dataset = TextDataset(train_texts)
+    test_dataset = TextDataset(test_texts)
 
     lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
     integrate(lora_model, lora_dim=args.lora_dim)
     freeze(lora_model)
     params(lora_model)
-    train(lora_model, train_dataset, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate,
-          grad_accum_steps=args.grad_accum_steps)
+    losses = train(lora_model, train_dataset, epochs=args.epochs, batch_size=args.batch_size,
+                   learning_rate=args.learning_rate,
+                   grad_accum_steps=args.grad_accum_steps)
 
-    logger.info("Evaluating the model on the test dataset")
+    logger.info(f"Evaluating the model: {len(test_dataset)} samples")
     preds, labels = [], []
     progress_bar = tqdm(total=len(test_dataset), desc="Evaluating")
     for i in range(len(test_dataset)):
@@ -216,9 +255,22 @@ def main(args) -> None:
     logger.info(f"ROUGE Scores: {rouge}")
     logger.info(f"CHRF Score: {chrf}")
 
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+    ax.plot(losses, marker='o', linestyle='-', color='b', label='Training Loss')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title(f"{model_name}: BLUE: {bleu:.2f}, ROUGE: {rouge['rouge-l']['f']:.2f}, CHRF: {chrf:.2f}")
+    ax.legend()
+    plt.minorticks_on()
+    plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
+    plt.grid(which='minor', linestyle=':', linewidth='0.2', color='grey')
+    fig.savefig(f"./figures/{time.time()}_loss_{model_name}.pdf")
+    plt.close(fig)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune GPT-2 model with LoRA")
+    parser.add_argument("--model_id", type=int, default=1, help="Identifier for the model to use")
     parser.add_argument("--train_file", type=str, required=True, help="Path to the training dataset")
     parser.add_argument("--test_file", type=str, required=True, help="Path to the testing dataset")
     parser.add_argument("--epochs", type=int, default=1, help="Number of training epochs")
