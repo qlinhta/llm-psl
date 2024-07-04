@@ -57,7 +57,7 @@ def setup_logger(name):
             'INFO': 'green',
             'WARNING': 'yellow',
             'ERROR': 'red',
-            'CRITICAL': 'bold_red',
+            'CRITICAL': 'orange',
         },
         secondary_log_colors={},
         style='%'
@@ -286,7 +286,7 @@ def main(args) -> None:
     plt.minorticks_on()
     plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
     plt.grid(which='minor', linestyle=':', linewidth='0.2', color='grey')
-    fig.savefig(f"./figures/{time.time()}_loss_{model_name}.pdf")
+    fig.savefig(f"./figures/{model_name}_{args.lora_dim}_{args.epochs}_{args.batch_size}_{args.learning_rate}.pdf")
     plt.close(fig)
 
 
