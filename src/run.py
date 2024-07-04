@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import math
 import warnings
+from cryptography.fernet import Fernet
 
 from nltk import choose
 
@@ -19,7 +20,7 @@ from prettytable import PrettyTable
 from torch.cuda.amp import GradScaler, autocast
 import logging
 from colorlog import ColoredFormatter
-from datasets import load_dataset
+from huggingface_hub import login
 import matplotlib.pyplot as plt
 from evaluation import compute_bleu, compute_rouge, compute_chrf, compute_perplexity
 
@@ -35,6 +36,15 @@ plt.rc('legend', fontsize=14)
 plt.rc('lines', markersize=7)
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+with open('secret.key', 'rb') as key_file:
+    key = key_file.read()
+with open('token.txt', 'rb') as token_file:
+    encrypted_token = token_file.read()
+cipher = Fernet(key)
+token = cipher.decrypt(encrypted_token).decode()
+
+login(token=token)
 
 
 def setup_logger(name):
@@ -69,7 +79,10 @@ def get_model_name(model_id):
         2: "gpt2-medium",
         3: "gpt2-large",
         4: "gpt2-xl",
-        5: "distilgpt2"
+        5: "distilgpt2",
+        6: "meta-llama/Meta-Llama-3-8B",
+        7: "google/gemma-2-9b",
+        8: "google/gemma-2-27b",
     }
     return model_mapping.get(model_id, "gpt2")
 
