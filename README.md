@@ -34,5 +34,10 @@ modularity and ease of use, allowing for easy downloading, preprocessing, and tr
 Running with GPT-2 Model on AG News Dataset:
 
 ```bash
-python3 ./src/run.py --model_id 1 --train_file ./data/train.csv --test_file ./data/test.csv --epochs 5 --batch_size 8 --learning_rate 1e-5 --grad_accum_steps 4 --lora_dim 8
+python3 ./src/ag.py --model_id 1 --train_file ./data/train.csv --test_file ./data/test.csv --epochs 5 --batch_size 8 --learning_rate 1e-5 --grad_accum_steps 4 --lora_dim 8
 ```
+
+Running with Models on E2E Dataset:
+
+```bash
+python3 ./src/e2e.py --train_limit 50 --eval_limit 10 --model_id 1 --epochs 5 --batch_size 8 --learning_rate 1e-5 --grad_accum_steps 4 --lora_dim 8```

@@ -215,8 +215,6 @@ def main(args) -> None:
 
     model_name = get_model_name(args.model_id)
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
-    # tokenizer = AutoTokenizer.from_pretrained(model_name)
-    # tokenizer.pad_token = tokenizer.eos_token
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -258,11 +256,13 @@ def main(args) -> None:
     for batch in test_dataloader:
         inputs, labels_batch = batch
         with torch.no_grad():
-            output = lora_model.generate(inputs['input_ids'], max_new_tokens=1024,
+            output = lora_model.generate(inputs['input_ids'], max_new_tokens=50,
                                          attention_mask=inputs['attention_mask'],
                                          pad_token_id=tokenizer.eos_token_id)
         pred_texts = [tokenizer.decode(o, skip_special_tokens=True) for o in output]
-        label_texts = [tokenizer.decode(l, skip_special_tokens=True) for l in labels_batch]
+        label_texts = [tokenizer.decode([token_id for token_id in l if token_id != -100], skip_special_tokens=True) for
+                       l in labels_batch]
+
         preds.extend(pred_texts)
         labels.extend(label_texts)
         progress_bar.update(1)

@@ -271,7 +271,7 @@ def main(args) -> None:
         input_ids = inputs['input_ids']
         attention_mask = inputs['attention_mask']
         with torch.no_grad():
-            output = lora_model.generate(input_ids, max_new_tokens=1024, attention_mask=attention_mask,
+            output = lora_model.generate(input_ids, max_new_tokens=50, attention_mask=attention_mask,
                                          pad_token_id=tokenizer.eos_token_id)
         pred_text = tokenizer.decode(output[0], skip_special_tokens=True)
         label_text = input_text

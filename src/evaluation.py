@@ -23,5 +23,6 @@ def compute_chrf(preds, labels):
         chrf_scores.append(sentence_chrf(reference=label, hypothesis=pred))
     return sum(chrf_scores) / len(chrf_scores)
 
+
 def compute_perplexity(loss, num_batches):
     return math.exp(loss / num_batches)
