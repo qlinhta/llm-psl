@@ -21,11 +21,11 @@ modularity and ease of use, allowing for easy downloading, preprocessing, and tr
 
 | Model ID | Model Name       | # Parameters |
 |----------|------------------|--------------|
-| 1        | GPT-2            | 117M         |
-| 2        | GPT-Medium       | 345M         |
-| 3        | GPT-Large        | 762M         |
-| 4        | GPT-XL           | 1.5B         |
-| 5        | DistilGPT-2      | 82M          |
+| 1        | DistilGPT2       | 82M          |
+| 2        | GPT2             | 124M         |
+| 3        | GPT2-Medium      | 345M         |
+| 4        | GPT2-Large       | 774M         |
+| 5        | GPT2-XL          | 1558M        |
 | 6        | Meta-Llama-3-8B  | 8B           |
 | 7        | Meta-Llama-3-70B | 70B          |
 | 8        | Gemma-2-9B       | 9B           |

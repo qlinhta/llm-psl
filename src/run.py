@@ -75,11 +75,11 @@ logger = setup_logger(__name__)
 
 def get_model_name(model_id):
     model_mapping = {
-        1: "gpt2",
-        2: "gpt2-medium",
-        3: "gpt2-large",
-        4: "gpt2-xl",
-        5: "distilgpt2",
+        1: "distilgpt2",
+        2: "gpt2",
+        3: "gpt2-medium",
+        4: "gpt2-large",
+        5: "gpt2-xl",
         6: "meta-llama/Meta-Llama-3-8B",
         7: "meta-llama/Meta-Llama-3-70B",
         8: "google/gemma-2-9b",
