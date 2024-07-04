@@ -249,14 +249,18 @@ def main(args) -> None:
     progress_bar = tqdm(total=len(test_dataloader), desc="Evaluating")
     for batch in test_dataloader:
         inputs, labels_batch = batch
+        logger.info(f"Input: {tokenizer.decode(inputs['input_ids'][0], skip_special_tokens=True)}")
+        logger.info(
+            f"Target: {tokenizer.decode([token_id for token_id in labels_batch[0] if token_id != -100], skip_special_tokens=True)}")
         with torch.no_grad():
             output = lora_model.generate(inputs['input_ids'], max_new_tokens=50,
                                          attention_mask=inputs['attention_mask'],
                                          pad_token_id=tokenizer.eos_token_id)
         pred_texts = [tokenizer.decode(o, skip_special_tokens=True) for o in output]
+        logger.info(f"Prediction: {pred_texts[0]}")
         label_texts = [dataset['validation'][i]['human_reference'] for i in
-                       range(len(pred_texts))]  # Match the number of predictions
-
+                       range(len(pred_texts))]
+        logger.info(f"Reference: {label_texts[0]}")
         preds.extend(pred_texts)
         labels.extend(label_texts)
         progress_bar.update(1)
