@@ -7,10 +7,7 @@ import math
 import warnings
 from cryptography.fernet import Fernet
 
-from nltk import choose
-
 warnings.filterwarnings("ignore")
-
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -23,6 +20,7 @@ from colorlog import ColoredFormatter
 from huggingface_hub import login
 import matplotlib.pyplot as plt
 from evaluation import compute_bleu, compute_rouge, compute_chrf, compute_perplexity
+import datasets
 
 plt.style.use('default')
 plt.rc('text', usetex=False)
@@ -101,68 +99,21 @@ device = device()
 logger.info(f"Using device: {device}")
 
 
-class TextDataset(Dataset):
-    def __init__(self, texts: list) -> None:
-        self.texts = texts
-
-    def __len__(self) -> int:
-        return len(self.texts)
-
-    def __getitem__(self, idx: int) -> str:
-        return self.texts[idx]
+def collate_batch(batch, tokenizer, block_size):
+    texts = [item['text'] for item in batch]
+    tokens = tokenizer(texts, padding='max_length', truncation=True, max_length=block_size, return_tensors="pt")
+    tokens = {key: val.to(device) for key, val in tokens.items()}
+    labels = tokens["input_ids"].clone()
+    labels[labels == tokenizer.pad_token_id] = -100
+    return tokens, labels
 
 
-def params(model: nn.Module) -> None:
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    all_params = sum(p.numel() for p in model.parameters())
-    table = PrettyTable(["Parameter Type", "Count"])
-    table.add_row(["Trainable Params", trainable_params])
-    table.add_row(["All Params", all_params])
-    table.add_row(["Trainable %", f"{100 * trainable_params / all_params:.2f}"])
-    logger.info(f"\n{table}")
+def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
+    def collate_fn(batch):
+        return collate_batch(batch, tokenizer, block_size)
 
-
-def train(model: nn.Module, dataset: Dataset, epochs: int = 1, batch_size: int = 8, learning_rate: float = 1e-5,
-          grad_accum_steps: int = 4) -> list:
-    global avg_loss
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
-    scaler = GradScaler() if device.type == 'cuda' else None
-    model.train()
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-    losses = []
-
-    for epoch in range(epochs):
-        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {learning_rate}")
-        progress_bar = tqdm(enumerate(loader), total=len(loader), desc=f"Epoch {epoch + 1}/{epochs}")
-        running_loss = 0.0
-
-        for idx, batch in progress_bar:
-            optimizer.zero_grad()
-            batch = [str(text) for text in batch]
-            inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
-            input_ids = inputs['input_ids'].to(device)
-            outputs = model(input_ids, labels=input_ids)
-            loss = outputs.loss / grad_accum_steps
-            running_loss += loss.item()
-
-            if scaler:
-                scaler.scale(loss).backward()
-                if (idx + 1) % grad_accum_steps == 0:
-                    scaler.step(optimizer)
-                    scaler.update()
-                    optimizer.zero_grad()
-            else:
-                loss.backward()
-                if (idx + 1) % grad_accum_steps == 0:
-                    optimizer.step()
-                    optimizer.zero_grad()
-
-            avg_loss = running_loss / (idx + 1)
-            progress_bar.set_postfix({'Loss': f"{loss.item() * grad_accum_steps:.4f}", 'Avg Loss': f"{avg_loss:.4f}"})
-        losses.append(avg_loss)
-
-    return losses
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    return dataloader
 
 
 class LoRALinear(nn.Module):
@@ -205,20 +156,52 @@ def freeze(model: nn.Module) -> None:
         p.requires_grad = "lora_right" in n or "lora_left" in n
 
 
-def generate(model: nn.Module, query: str, max_length: int = 100, top_n: int = 1) -> None:
-    inputs = tokenizer(query, return_tensors="pt", padding=True).to(device)
-    cur_ids = inputs['input_ids']
-    attention_mask = inputs['attention_mask']
-    for _ in range(max_length):
-        outputs = model(cur_ids, attention_mask=attention_mask)
-        logits = outputs.logits
-        softmax_logits = torch.softmax(logits[0, -1], dim=0)
-        next_token_id = choose(softmax_logits.to('cpu').detach().numpy(), n=top_n)
-        cur_ids = torch.cat([cur_ids, torch.ones((1, 1)).long().to(device) * next_token_id], dim=1)
-        attention_mask = torch.cat([attention_mask, torch.ones((1, 1)).long().to(device)], dim=1)
-        if next_token_id in tokenizer.encode(''):
-            break
-        print(tokenizer.decode([next_token_id]), end='')
+def params(model: nn.Module) -> None:
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    all_params = sum(p.numel() for p in model.parameters())
+    table = PrettyTable(["Parameter Type", "Count"])
+    table.add_row(["Trainable Params", trainable_params])
+    table.add_row(["All Params", all_params])
+    table.add_row(["Trainable %", f"{100 * trainable_params / all_params:.2f}"])
+    logger.info(f"\n{table}")
+
+
+def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size: int = 8, learning_rate: float = 1e-5,
+          grad_accum_steps: int = 4) -> list:
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    scaler = GradScaler() if device.type == 'cuda' else None
+    model.train()
+    losses = []
+
+    for epoch in range(epochs):
+        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {learning_rate}")
+        running_loss = 0.0
+        progress_bar = tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch + 1}/{epochs}")
+
+        for idx, (inputs, labels) in progress_bar:
+            optimizer.zero_grad()
+            with autocast(enabled=scaler is not None):
+                outputs = model(**inputs, labels=labels)
+                loss = outputs.loss / grad_accum_steps
+            running_loss += loss.item()
+
+            if scaler:
+                scaler.scale(loss).backward()
+                if (idx + 1) % grad_accum_steps == 0:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+            else:
+                loss.backward()
+                if (idx + 1) % grad_accum_steps == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+            avg_loss = running_loss / (idx + 1)
+            progress_bar.set_postfix({'Loss': f"{loss.item() * grad_accum_steps:.4f}", 'Avg Loss': f"{avg_loss:.4f}"})
+        losses.append(avg_loss)
+
+    return losses
 
 
 def main(args) -> None:
@@ -232,22 +215,29 @@ def main(args) -> None:
 
     model_name = get_model_name(args.model_id)
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.pad_token = "<PAD>"
-    tokenizer.pad_token_id = tokenizer.eos_token_id
+    # tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
+    tokenizer.pad_token = tokenizer.eos_token
 
-    train_df = pd.read_csv(args.train_file)
-    test_df = pd.read_csv(args.test_file)
+    dataset = datasets.load_dataset('e2e_nlg')
+    train_data = dataset['train']
+    test_data = dataset['validation']
 
-    # train_texts = train_df['Description'][:100].tolist()
-    # test_texts = test_df['Description'][:10].tolist()
-    train_texts = train_df['Description'].tolist()
-    test_texts = test_df['Description'].tolist()
+    logger.info(f"Train data columns: {train_data.column_names}")
+    logger.info(f"Test data columns: {test_data.column_names}")
+    logger.info(f"Sample train data: {train_data[0]}")
+    train_data = train_data.map(lambda x: {'text': x['meaning_representation'] + " => " + x['human_reference']})
+    test_data = test_data.map(lambda x: {'text': x['meaning_representation'] + " => " + x['human_reference']})
 
-    train_dataset = TextDataset(train_texts)
-    test_dataset = TextDataset(test_texts)
+    if args.train_limit:
+        train_data = train_data.select(range(args.train_limit))
+    if args.eval_limit:
+        test_data = test_data.select(range(args.eval_limit))
 
-    # lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    train_dataloader = create_dataloader(train_data, tokenizer, batch_size=args.batch_size)
+    test_dataloader = create_dataloader(test_data, tokenizer, batch_size=args.batch_size)
+
     try:
         logger.info(f"Attempting to load model: {model_name}")
         lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
@@ -258,25 +248,23 @@ def main(args) -> None:
     integrate(lora_model, lora_dim=args.lora_dim)
     freeze(lora_model)
     params(lora_model)
-    losses = train(lora_model, train_dataset, epochs=args.epochs, batch_size=args.batch_size,
+    losses = train(lora_model, train_dataloader, epochs=args.epochs, batch_size=args.batch_size,
                    learning_rate=args.learning_rate,
                    grad_accum_steps=args.grad_accum_steps)
 
-    logger.info(f"Evaluating the model: {len(test_dataset)} samples")
+    logger.info(f"Evaluating the model: {len(test_dataloader)} samples")
     preds, labels = [], []
-    progress_bar = tqdm(total=len(test_dataset), desc="Evaluating")
-    for i in range(len(test_dataset)):
-        input_text = test_dataset[i]
-        inputs = tokenizer(input_text, return_tensors='pt').to(device)
-        input_ids = inputs['input_ids']
-        attention_mask = inputs['attention_mask']
+    progress_bar = tqdm(total=len(test_dataloader), desc="Evaluating")
+    for batch in test_dataloader:
+        inputs, labels_batch = batch
         with torch.no_grad():
-            output = lora_model.generate(input_ids, max_new_tokens=1024, attention_mask=attention_mask,
+            output = lora_model.generate(inputs['input_ids'], max_new_tokens=1024,
+                                         attention_mask=inputs['attention_mask'],
                                          pad_token_id=tokenizer.eos_token_id)
-        pred_text = tokenizer.decode(output[0], skip_special_tokens=True)
-        label_text = input_text
-        preds.append(pred_text)
-        labels.append(label_text)
+        pred_texts = [tokenizer.decode(o, skip_special_tokens=True) for o in output]
+        label_texts = [tokenizer.decode(l, skip_special_tokens=True) for l in labels_batch]
+        preds.extend(pred_texts)
+        labels.extend(label_texts)
         progress_bar.update(1)
     progress_bar.close()
 
@@ -292,7 +280,7 @@ def main(args) -> None:
     ax.plot(losses, marker='o', linestyle='-', color='b', label='Training Loss')
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
-    ax.set_title(f"{model_name}: BLUE: {bleu:.2f}, ROUGE: {rouge['rouge-l']['f']:.2f}, CHRF: {chrf:.2f}")
+    ax.set_title(f"{model_name}: BLEU: {bleu:.2f}, ROUGE: {rouge['rouge-l']['f']:.2f}, CHRF: {chrf:.2f}")
     ax.legend()
     plt.minorticks_on()
     plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
@@ -304,8 +292,8 @@ def main(args) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune GPT-2 model with LoRA")
     parser.add_argument("--model_id", type=int, default=1, help="Identifier for the model to use")
-    parser.add_argument("--train_file", type=str, required=True, help="Path to the training dataset")
-    parser.add_argument("--test_file", type=str, required=True, help="Path to the testing dataset")
+    parser.add_argument("--train_limit", type=int, default=None, help="Limit the number of samples")
+    parser.add_argument("--eval_limit", type=int, default=None, help="Limit the number of samples for evaluation")
     parser.add_argument("--epochs", type=int, default=1, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=1e-5, help="Learning rate for training")
