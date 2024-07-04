@@ -81,8 +81,9 @@ def get_model_name(model_id):
         4: "gpt2-xl",
         5: "distilgpt2",
         6: "meta-llama/Meta-Llama-3-8B",
-        7: "google/gemma-2-9b",
-        8: "google/gemma-2-27b",
+        7: "meta-llama/Meta-Llama-3-70B",
+        8: "google/gemma-2-9b",
+        9: "google/gemma-2-27b",
     }
     return model_mapping.get(model_id, "gpt2")
 
@@ -228,13 +229,21 @@ def main(args) -> None:
     train_df = pd.read_csv(args.train_file)
     test_df = pd.read_csv(args.test_file)
 
-    train_texts = train_df['Description'][:100].tolist()
-    test_texts = test_df['Description'][:10].tolist()
+    # train_texts = train_df['Description'][:100].tolist()
+    # test_texts = test_df['Description'][:10].tolist()
+    train_texts = train_df['Description'].tolist()
+    test_texts = test_df['Description'].tolist()
 
     train_dataset = TextDataset(train_texts)
     test_dataset = TextDataset(test_texts)
 
-    lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    # lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    try:
+        lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    except Exception as e:
+        logger.error(f"Failed to load model from Hugging Face: {e}. Attempting to load from local safetensors.")
+        lora_model = AutoModelForCausalLM.from_pretrained(f'./models/{model_name}', from_safetensors=True).to(device)
+
     integrate(lora_model, lora_dim=args.lora_dim)
     freeze(lora_model)
     params(lora_model)
@@ -251,7 +260,7 @@ def main(args) -> None:
         input_ids = inputs['input_ids']
         attention_mask = inputs['attention_mask']
         with torch.no_grad():
-            output = lora_model.generate(input_ids, max_new_tokens=50, attention_mask=attention_mask,
+            output = lora_model.generate(input_ids, max_new_tokens=1024, attention_mask=attention_mask,
                                          pad_token_id=tokenizer.eos_token_id)
         pred_text = tokenizer.decode(output[0], skip_special_tokens=True)
         label_text = input_text
