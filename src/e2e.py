@@ -19,7 +19,8 @@ import logging
 from colorlog import ColoredFormatter
 from huggingface_hub import login
 import matplotlib.pyplot as plt
-from evaluation import compute_bleu, compute_rouge, compute_chrf, compute_perplexity
+from evaluation import compute_bleu, compute_meteor, compute_rouge, compute_rouge_l, compute_cider, compute_chrf, \
+    compute_perplexity
 import datasets
 
 plt.style.use('default')
@@ -268,7 +269,7 @@ def main(args) -> None:
         progress_bar.update(1)
     progress_bar.close()
 
-    bleu = compute_bleu(preds, labels)
+    """bleu = compute_bleu(preds, labels)
     rouge = compute_rouge(preds, labels)
     chrf = compute_chrf(preds, labels)
 
@@ -281,6 +282,31 @@ def main(args) -> None:
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
     ax.set_title(f"{model_name}: BLEU: {bleu:.2f}, ROUGE: {rouge['rouge-l']['f']:.2f}, CHRF: {chrf:.2f}")
+    ax.legend()
+    plt.minorticks_on()
+    plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
+    plt.grid(which='minor', linestyle=':', linewidth='0.2', color='grey')
+    fig.savefig(f"./figures/{model_name}_{args.lora_dim}_{args.epochs}_{args.batch_size}_{args.learning_rate}.pdf")
+    plt.close(fig)"""
+
+    bleu = compute_bleu(preds, labels)
+    meteor = compute_meteor(preds, labels)
+    rouge_l = compute_rouge_l(preds, labels)
+    cider = compute_cider(preds, labels)
+    chrf = compute_chrf(preds, labels)
+
+    logger.info(f"BLEU Score: {bleu}")
+    logger.info(f"METEOR Score: {meteor}")
+    logger.info(f"ROUGE-L Score: {rouge_l}")
+    logger.info(f"CIDEr Score: {cider}")
+    logger.info(f"CHRF Score: {chrf}")
+
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+    ax.plot(losses, marker='o', linestyle='-', color='b', label='Training Loss')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title(
+        f"{model_name}: BLEU: {bleu:.2f}, METEOR: {meteor:.2f}, ROUGE-L: {rouge_l:.2f}, CIDEr: {cider:.2f}, CHRF: {chrf:.2f}")
     ax.legend()
     plt.minorticks_on()
     plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
