@@ -1,5 +1,4 @@
 numpy~=1.26.4
-torch
 nltk~=3.8.1
 tqdm~=4.66.4
 transformers~=4.42.3

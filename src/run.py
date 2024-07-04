@@ -228,8 +228,10 @@ def main(args) -> None:
     train_df = pd.read_csv(args.train_file)
     test_df = pd.read_csv(args.test_file)
 
-    train_texts = train_df['Description'][:100].tolist()
-    test_texts = test_df['Description'][:10].tolist()
+    # train_texts = train_df['Description'][:100].tolist()
+    # test_texts = test_df['Description'][:10].tolist()
+    train_texts = train_df['Description'].tolist()
+    test_texts = test_df['Description'].tolist()
 
     train_dataset = TextDataset(train_texts)
     test_dataset = TextDataset(test_texts)
