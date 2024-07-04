@@ -237,13 +237,8 @@ def main(args) -> None:
     train_dataloader = create_dataloader(train_data, tokenizer, batch_size=args.batch_size)
     test_dataloader = create_dataloader(test_data, tokenizer, batch_size=args.batch_size)
 
-    try:
-        logger.info(f"Attempting to load model: {model_name}")
-        lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
-    except Exception as e:
-        logger.error(f"Failed to load model from Hugging Face: {e}. Attempting to load from local safetensors.")
-        lora_model = AutoModelForCausalLM.from_pretrained(f'./models/{model_name}', from_safetensors=True).to(device)
-
+    logger.info(f"Attempting to load model: {model_name}")
+    lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
     integrate(lora_model, lora_dim=args.lora_dim)
     freeze(lora_model)
     params(lora_model)
@@ -269,26 +264,6 @@ def main(args) -> None:
         progress_bar.update(1)
     progress_bar.close()
 
-    """bleu = compute_bleu(preds, labels)
-    rouge = compute_rouge(preds, labels)
-    chrf = compute_chrf(preds, labels)
-
-    logger.info(f"BLEU Score: {bleu}")
-    logger.info(f"ROUGE Scores: {rouge}")
-    logger.info(f"CHRF Score: {chrf}")
-
-    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-    ax.plot(losses, marker='o', linestyle='-', color='b', label='Training Loss')
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Loss')
-    ax.set_title(f"{model_name}: BLEU: {bleu:.2f}, ROUGE: {rouge['rouge-l']['f']:.2f}, CHRF: {chrf:.2f}")
-    ax.legend()
-    plt.minorticks_on()
-    plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
-    plt.grid(which='minor', linestyle=':', linewidth='0.2', color='grey')
-    fig.savefig(f"./figures/{model_name}_{args.lora_dim}_{args.epochs}_{args.batch_size}_{args.learning_rate}.pdf")
-    plt.close(fig)"""
-
     bleu = compute_bleu(preds, labels)
     meteor = compute_meteor(preds, labels)
     rouge_l = compute_rouge_l(preds, labels)
@@ -306,7 +281,8 @@ def main(args) -> None:
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
     ax.set_title(
-        f"{model_name}: BLEU: {bleu:.2f}, METEOR: {meteor:.2f}, ROUGE-L: {rouge_l:.2f}, CIDEr: {cider:.2f}, CHRF: {chrf:.2f}")
+        f"{model_name}: BLEU: {bleu:.2f}, METEOR: {meteor:.2f}, ROUGE-L: {rouge_l:.2f}, CIDEr: {cider:.2f}, CHRF: {chrf:.2f}",
+        fontsize=10)
     ax.legend()
     plt.minorticks_on()
     plt.grid(which='major', linestyle='-', linewidth='0.2', color='grey')
