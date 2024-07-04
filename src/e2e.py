@@ -1,13 +1,10 @@
 import os
 import argparse
-import time
 import numpy as np
 import pandas as pd
 import math
 import warnings
 from cryptography.fernet import Fernet
-
-warnings.filterwarnings("ignore")
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -19,9 +16,10 @@ import logging
 from colorlog import ColoredFormatter
 from huggingface_hub import login
 import matplotlib.pyplot as plt
-from evaluation import compute_bleu, compute_meteor, compute_rouge, compute_rouge_l, compute_cider, compute_chrf, \
-    compute_perplexity
 import datasets
+from evaluation import compute_bleu, compute_meteor, compute_rouge, compute_rouge_l, compute_cider, compute_chrf
+
+warnings.filterwarnings("ignore")
 
 plt.style.use('default')
 plt.rc('text', usetex=False)
@@ -227,7 +225,7 @@ def main(args) -> None:
     logger.info(f"Test data columns: {test_data.column_names}")
     logger.info(f"Sample train data: {train_data[0]}")
     train_data = train_data.map(lambda x: {'text': x['meaning_representation'] + " => " + x['human_reference']})
-    test_data = test_data.map(lambda x: {'text': x['meaning_representation'] + " => " + x['human_reference']})
+    test_data = test_data.map(lambda x: {'text': x['meaning_representation']})
 
     if args.train_limit:
         train_data = train_data.select(range(args.train_limit))
@@ -256,8 +254,8 @@ def main(args) -> None:
                                          attention_mask=inputs['attention_mask'],
                                          pad_token_id=tokenizer.eos_token_id)
         pred_texts = [tokenizer.decode(o, skip_special_tokens=True) for o in output]
-        label_texts = [tokenizer.decode([token_id for token_id in l if token_id != -100], skip_special_tokens=True) for
-                       l in labels_batch]
+        label_texts = [dataset['validation'][i]['human_reference'] for i in
+                       range(len(pred_texts))]  # Match the number of predictions
 
         preds.extend(pred_texts)
         labels.extend(label_texts)
@@ -270,11 +268,14 @@ def main(args) -> None:
     cider = compute_cider(preds, labels)
     chrf = compute_chrf(preds, labels)
 
-    logger.info(f"BLEU Score: {bleu}")
-    logger.info(f"METEOR Score: {meteor}")
-    logger.info(f"ROUGE-L Score: {rouge_l}")
-    logger.info(f"CIDEr Score: {cider}")
-    logger.info(f"CHRF Score: {chrf}")
+    table = PrettyTable()
+    table.field_names = ["Metric", "Score"]
+    table.add_row(["BLEU", f"{bleu}"])
+    table.add_row(["METEOR", f"{meteor}"])
+    table.add_row(["ROUGE-L", f"{rouge_l}"])
+    table.add_row(["CIDEr", f"{cider}"])
+    table.add_row(["CHRF", f"{chrf}"])
+    logger.info(f"\n{table}")
 
     fig, ax = plt.subplots(1, 1, figsize=(7, 5))
     ax.plot(losses, marker='o', linestyle='-', color='b', label='Training Loss')
