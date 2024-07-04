@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from evaluation import compute_bleu, compute_rouge, compute_chrf, compute_perplexity
 
 plt.style.use('default')
-plt.rc('text', usetex=True)
+plt.rc('text', usetex=False)
 plt.rc('font', family='sans-serif')
 plt.rc('font', size=14)
 plt.rc('axes', titlesize=14)
