@@ -1,5 +1,6 @@
 import os
 import argparse
+import re
 import numpy as np
 import math
 import warnings
@@ -130,12 +131,12 @@ class LoRALinear(nn.Module):
         super(LoRALinear, self).__init__()
         out, inp = weight.shape
         self.linear = nn.Linear(inp, out, bias=bias is not None)
-        self.linear.weight = nn.Parameter(weight)
+        self.linear.weight = nn.Parameter(weight.contiguous())
         if bias is not None:
-            self.linear.bias = nn.Parameter(bias)
-        self.lora_right = nn.Parameter(torch.zeros(inp, lora_dim))
+            self.linear.bias = nn.Parameter(bias.contiguous())
+        self.lora_right = nn.Parameter(torch.zeros(inp, lora_dim).contiguous())
         nn.init.kaiming_uniform_(self.lora_right, a=math.sqrt(5))
-        self.lora_left = nn.Parameter(torch.zeros(lora_dim, out))
+        self.lora_left = nn.Parameter(torch.zeros(lora_dim, out).contiguous())
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         frozen_output = self.linear(input)
@@ -213,6 +214,31 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
     return losses
 
 
+def make_contiguous(model):
+    for name, param in model.named_parameters():
+        if not param.is_contiguous():
+            param.data = param.contiguous()
+
+
+def save_model(model, tokenizer, save_path):
+    make_contiguous(model)
+    model.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
+
+
+def clean_text(text):
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    return text
+
+
+def save_predictions_and_references(predictions, references, pred_file, ref_file):
+    with open(pred_file, 'w', encoding='utf-8') as pred_f, open(ref_file, 'w', encoding='utf-8') as ref_f:
+        for pred, ref in zip(predictions, references):
+            pred_f.write(pred + '\n')
+            ref_f.write(ref + '\n')
+
+
 def main(args) -> None:
     global tokenizer
 
@@ -246,15 +272,13 @@ def main(args) -> None:
     losses = train(lora_model, train_dataloader, epochs=args.epochs, batch_size=args.batch_size,
                    learning_rate=args.learning_rate, grad_accum_steps=args.grad_accum_steps)
 
+    save_model(lora_model, tokenizer, './saved_model')
+
     logger.info(f"Evaluating the model: {len(test_dataloader)} samples")
     preds, labels = [], []
     progress_bar = tqdm(total=len(test_dataloader), desc="Evaluating")
     for batch in test_dataloader:
         inputs, _, targets = batch
-        input_texts = [tokenizer.decode(inputs['input_ids'][i], skip_special_tokens=True) for i in
-                       range(len(inputs['input_ids']))]
-        logger.info(f"Input: {input_texts[0]}")
-        logger.info(f"Target: {targets[0]}")
         with torch.no_grad():
             output = lora_model.generate(inputs['input_ids'], max_new_tokens=60,
                                          attention_mask=inputs['attention_mask'],
@@ -262,13 +286,14 @@ def main(args) -> None:
                                          do_sample=False,
                                          temperature=0.9,
                                          top_k=40)
-        # logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
         pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split("Description:")[-1].strip() for o in output]
-        logger.info(f"Prediction: {pred_texts[0]}")
+        pred_texts = [clean_text(text) for text in pred_texts]
         preds.extend(pred_texts)
         labels.extend(targets)
         progress_bar.update(1)
     progress_bar.close()
+
+    save_predictions_and_references(preds, labels, 'hypotheses.txt', 'references.txt')
 
     bleu = compute_bleu(preds, labels)
     meteor = compute_meteor(preds, labels)

@@ -17,7 +17,7 @@ This repo reproduces our experiments on GPT-2.
 Our implementation is based on the fine-tuning code for GPT-2 in [Hugging Face](https://huggingface.co/).
 There are several directories in this repo:
 * [src/](src) contains the source code used for data processing, training, and decoding.
-* [eval/](eval) contains the code for task-specific evaluation scripts.
+* [eval/](../eval) contains the code for task-specific evaluation scripts.
 * [data/](data) contains the raw data we used in our experiments.
 * [vocab/](vocab) contains the GPT-2 vocabulary files.
 
