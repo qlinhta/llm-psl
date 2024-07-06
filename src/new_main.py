@@ -111,7 +111,7 @@ def encode (input, output, enc):
             context_bpes= enc.encode(context)
             context_bpes += [bos] if add_bos else []
 
-            completion_bpes = enc.encode(' ' + completion)
+            completion_bpes = enc.encode('=' + completion)
             completion_bpes += [eos] if add_eos else []
 
             ft_json = {}
@@ -305,7 +305,7 @@ def main(args) -> None:
         table.add_row([i, get_model_name(i)])
     logger.info(f"\n{table}")
     format_convert("./data/train.txt", "./data/train_formatted.jsonl")
-    format_convert("./data/test.txt", "./data/test_formatted.jsonl")
+    format_convert("./data/test_small.txt", "./data/test_formatted.jsonl")
 
     model_name = get_model_name(args.model_id)
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
@@ -371,12 +371,15 @@ def main(args) -> None:
         labels.extend(targets)
         progress_bar.update(1)
     progress_bar.close()
-  
-    bleu = compute_bleu(preds, labels)
-    meteor = compute_meteor(preds, labels)
-    rouge_l = compute_rouge_l(preds, labels)
-    cider = compute_cider(preds, labels)
-    chrf = compute_chrf(preds, labels)
+    only_preds = [pred.split("=")[-1] for pred in preds]
+    print("only_preds",only_preds)
+    only_labels=[label.split("=")[-1] for label in labels]
+    print("only_labels",only_labels)
+    bleu = compute_bleu(only_preds, only_preds)
+    meteor = compute_meteor(only_preds, only_labels)
+    rouge_l = compute_rouge_l(only_preds, only_labels)
+    cider = compute_cider(only_preds, only_labels)
+    chrf = compute_chrf(only_preds, only_labels)
 
     table = PrettyTable()
     table.field_names = ["Metric", "Score"]
