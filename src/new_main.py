@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, AdamW
 from prettytable import PrettyTable
 from torch.cuda.amp import GradScaler, autocast
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import logging
 from colorlog import ColoredFormatter
 from huggingface_hub import login
@@ -251,12 +252,13 @@ def params(model: nn.Module) -> None:
 def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size: int = 8, learning_rate: float = 1e-5,
           grad_accum_steps: int = 4) -> list:
     optimizer = AdamW(model.parameters(), lr=learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs * len(dataloader))
     scaler = GradScaler() if device.type == 'cuda' else None
     model.train()
     losses = []
 
     for epoch in range(epochs):
-        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {learning_rate}")
+        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {scheduler.get_last_lr()[0]}")
         running_loss = 0.0
         progress_bar = tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch + 1}/{epochs}")
 
@@ -283,6 +285,8 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
                 if (idx + 1) % grad_accum_steps == 0:
                     optimizer.step()
                     optimizer.zero_grad()
+
+            scheduler.step()
 
             avg_loss = running_loss / (idx + 1)
             progress_bar.set_postfix({'Loss': f"{loss.item() * grad_accum_steps:.4f}", 'Avg Loss': f"{avg_loss:.4f}"})
@@ -348,22 +352,20 @@ def main(args) -> None:
                        range(len(inputs))]
       targets= [tokenizer.decode(targets[i], skip_special_tokens=True) for i in
                        range(len(targets))]
-      logger.info(f"Input: {input_texts[0]}")
-      logger.info(f"Target: {targets[0]}")
+      # logger.info(f"Input: {input_texts[0]}")
+      # logger.info(f"Target: {targets[0]}")
       with torch.no_grad():
-        input_len = int(torch.sum(masks).cpu().numpy())
-        print(input_len)
-        print(masks)
+        # input_len = int(torch.sum(masks).cpu().numpy())
+        # print(input_len)
+        # print(masks)
         output = lora_model.generate(inputs, max_new_tokens=30,
                                          attention_mask=masks,
                                          pad_token_id=tokenizer.eos_token_id,
                                          do_sample=False,
                                          temperature=0.9,
                                          top_k=40)
-        logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
-
+        # logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
         pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
-      
         logger.info(f"Prediction: {pred_texts}")
         preds.extend(pred_texts)
         labels.extend(targets)
