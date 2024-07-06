@@ -1,4 +1,3 @@
-import os
 import argparse
 import numpy as np
 import math
@@ -20,7 +19,8 @@ import sys
 import io
 import json
 import pandas as pd
-
+import random
+import os
 
 plt.style.use('default')
 plt.rc('font', family='sans-serif', size=14)
@@ -92,17 +92,7 @@ def device() -> torch.device:
 device = device()
 logger.info(f"Using device: {device}")
 
-"""
-def collate_batch(batch, tokenizer, block_size):
-    texts = [item['text'] for item in batch]
-    targets = [item['target'] for item in batch]
-    tokens = tokenizer(texts, padding='max_length', truncation=True, max_length=block_size, return_tensors="pt")
-    tokens = {key: val.to(device) for key, val in tokens.items()}
-    labels = tokens["input_ids"].clone()
-    labels[labels == tokenizer.pad_token_id] = -100
-    return tokens, labels, targets
 
-"""
 def encode (input, output, enc):
     writer = open(output, 'w')
     add_bos = True
@@ -129,14 +119,6 @@ def encode (input, output, enc):
 
             line_idx += 1
     writer.close()
-
-
-"""def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
-    def collate_fn(batch):
-        return collate_batch(batch, tokenizer, block_size)
-
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    return dataloader"""
 
 def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length=0):
 
@@ -166,7 +148,7 @@ def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length
         self.max_seq_length = max_seq_length
         self.max_eval_length = max_eval_length
         self.joint_lm = joint_lm
-
+        self.rndm= random.Random(911)
         self.num_batches = int((self.num_examples + self.batch_size - 1) / self.batch_size) 
 
         self.prefix_len = prefix_len
@@ -178,6 +160,9 @@ def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length
         return self.num_batches * self.batch_size
         
     def __getitem__(self, item):
+        
+        if(item >= self.num_examples):
+            item = self.rndm.randint(0, self.num_examples - 1)
 
         example = self.ft_samples[item]
         context = example[0]
