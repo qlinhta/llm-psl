@@ -1,0 +1,4 @@
+name : Blue Spice | Type : coffee shop | area : city centre||A coffee shop in the city centre area called Blue Spice . 
+name : Blue Spice | Type : coffee shop | area : city centre||Blue Spice is a coffee shop in city centre . 
+name : Blue Spice | Type : coffee shop | area : riverside||There is a coffee shop Blue Spice in the riverside area . 
+name : Blue Spice | Type : coffee shop | area : riverside||At the riverside , there is a coffee shop called The Blue Spice . 
