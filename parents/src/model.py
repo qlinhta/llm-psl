@@ -1,14 +1,10 @@
-#  ------------------------------------------------------------------------------------------
-#  Copyright (c) Microsoft Corporation. All rights reserved.
-#  Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
-#  ------------------------------------------------------------------------------------------
 import logging
 import math
 import os
 from collections import OrderedDict 
 import copy
 import math
-
+import sys
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
@@ -17,6 +13,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from torch.nn.parameter import Parameter
 
+sys.path.append(os.path.join(os.path.dirname(__file__), 'loralib'))
 import loralib as lora
 
 
@@ -29,9 +26,6 @@ def gelu_fast(x):
 
 
 def gelu_new(x):
-    """ Implementation of the gelu activation function currently in Google Bert repo (identical to OpenAI GPT).
-        Also see https://arxiv.org/abs/1606.08415
-    """
     return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3.0))))
 
 
@@ -40,18 +34,11 @@ def swish(x):
 
 
 def _gelu_python(x):
-    """ Original Implementation of the gelu activation function in Google Bert repo when initially created.
-        For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
-        0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
-        This is now written in C in torch.nn.functional
-        Also see https://arxiv.org/abs/1606.08415
-    """
     return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
 class LayerNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-12):
-        """Construct a layernorm module in the TF style (epsilon inside the square root)."""
         super(LayerNorm, self).__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
         self.bias = nn.Parameter(torch.zeros(hidden_size))
@@ -83,8 +70,7 @@ class Conv1D(nn.Module):
 class Attention(nn.Module):
     def __init__(self, nx, n_ctx, config, scale=False):
         super(Attention, self).__init__()
-        n_state = nx  # in Attention: n_state=768 (nx=n_embd)
-        # [switch nx => n_state from Block to Attention to keep identical to TF implem]
+        n_state = nx
         
         assert n_state % config.n_head == 0
         self.register_buffer("bias", torch.tril(torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
@@ -112,10 +98,6 @@ class Attention(nn.Module):
         b = self.bias[:, :, ns-nd:ns, :ns]
         w = w * b - 1e10 * (1 - b)
 
-        # q : (batch, head, q_seq_length, head_features)
-        # k : (batch, head, head_features, kv_seq_length)
-        # w : (batch, head, q_seq_length, kv_seq_length)
-        # v : (batch, head, kv_seq_length, head_features)
         if len_kv is not None:
             _len = torch.arange(k.size(-1), device=k.device)
             _input_msk =  _len[None, :] >= (len_kv)[:, None]
@@ -127,15 +109,15 @@ class Attention(nn.Module):
     def merge_heads(self, x):
         x = x.permute(0, 2, 1, 3).contiguous()
         new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
-        return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
+        return x.view(*new_x_shape)
 
     def split_heads(self, x, k=False):
         new_x_shape = x.size()[:-1] + (self.n_head, x.size(-1) // self.n_head)
-        x = x.view(*new_x_shape)  # in Tensorflow implem: fct split_states
+        x = x.view(*new_x_shape)
         if k:
-            return x.permute(0, 2, 3, 1).contiguous()  # (batch, head, head_features, seq_length)
+            return x.permute(0, 2, 3, 1).contiguous()
         else:
-            return x.permute(0, 2, 1, 3).contiguous()  # (batch, head, seq_length, head_features)
+            return x.permute(0, 2, 1, 3).contiguous()
 
     def forward(self, x, history=None, layer_past=None, len_past=None):
         hidden_states = x
@@ -147,16 +129,11 @@ class Attention(nn.Module):
         key = self.split_heads(key, k=True)
         value = self.split_heads(value)
 
-        #_input_msk = None
-
         len_kv = None
 
         if layer_past is not None:
-            # key : (batch, head, head_features, seq_length)
-            # value : (batch, head, seq_length, head_features)
-            # layer_past, key : (batch, head, seq_length, head_features)
             if len_past is None:
-                past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
+                past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]
                 key = torch.cat((past_key, key), dim=-1)
                 value = torch.cat((past_value, value), dim=-2)
             else:
@@ -175,7 +152,7 @@ class Attention(nn.Module):
 
                 len_kv = len_past + 1
 
-        present = torch.stack((key.transpose(-2, -1), value))  # transpose to have same shapes for stacking
+        present = torch.stack((key.transpose(-2, -1), value))
         a = self._attn(query, key, value, len_kv = len_kv)
         a = self.merge_heads(a)
         a = self.c_proj(a)
@@ -183,7 +160,7 @@ class Attention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, n_state, config):  # in MLP: n_state=3072 (4 * n_embd)
+    def __init__(self, n_state, config):
         super(MLP, self).__init__()
         nx = config.n_embd
         self.c_fc = Conv1D(n_state, nx)
@@ -228,7 +205,6 @@ class GPT2Model(nn.Module):
 
         self.config = config
 
-
     def forward(
         self, 
         input_ids, 
@@ -241,7 +217,6 @@ class GPT2Model(nn.Module):
             past_length = 0
             past = [None] * len(self.h)
         elif len_past is None:
-            # equal size for past. []
             past_length = past[0][0].size(-2)
 
         if position_ids is None and len_past is None:
@@ -251,7 +226,7 @@ class GPT2Model(nn.Module):
             )
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         elif len_past is not None:
-            position_ids = (len_past).unsqueeze(1) #.long()
+            position_ids = (len_past).unsqueeze(1)
 
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_ids.size(-1))
@@ -285,11 +260,9 @@ class GPT2LMHead(nn.Module):
     def set_embeddings_weights(self, model_embeddings_weights):
         embed_shape = model_embeddings_weights.shape
         self.decoder = nn.Linear(embed_shape[1], embed_shape[0], bias=False)
-        self.decoder.weight = model_embeddings_weights  # Tied weights
+        self.decoder.weight = model_embeddings_weights
 
     def forward(self, hidden_state):
-        # Truncated Language modeling logits (we remove the last token)
-        # h_trunc = h[:, :-1].contiguous().view(-1, self.n_embd)
         lm_logits = self.decoder(hidden_state)
         return lm_logits
 
@@ -335,7 +308,6 @@ class GPT2LMModel(nn.Module):
         self.apply(self._init_weights)
 
     def set_tied(self):
-        """ Make sure we are sharing the embeddings"""
         self.lm_head.set_embeddings_weights(self.transformer.wte.weight)
 
     def forward(
@@ -351,7 +323,6 @@ class GPT2LMModel(nn.Module):
         _batch, _len = input_ids.shape
         hidden_states, presents = self.transformer(input_ids, past=past, len_past=len_past)
 
-        # batch, seq, vocab
         lm_logits = self.lm_head(hidden_states)
 
         if lm_labels is not None:
@@ -379,9 +350,6 @@ class GPT2LMModel(nn.Module):
 
                     if _is_succ:
                         _all_acc[_b] = 1.0
-
-                #_t1_acc = _t1_acc * 1.0 / _batch
-                #_all_acc = _all_acc * 1.0 / _batch
 
             if label_smooth > 0.0001:
                 logprobs = torch.nn.functional.log_softmax(lm_logits.view(-1, lm_logits.size(-1)), dim=-1)
