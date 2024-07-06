@@ -375,7 +375,7 @@ def main(args) -> None:
     print("only_preds",only_preds)
     only_labels=[label.split("=")[-1] for label in labels]
     print("only_labels",only_labels)
-    bleu = compute_bleu(only_preds, only_preds)
+    bleu = compute_bleu(only_preds, only_labels)
     meteor = compute_meteor(only_preds, only_labels)
     rouge_l = compute_rouge_l(only_preds, only_labels)
     cider = compute_cider(only_preds, only_labels)
