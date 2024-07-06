@@ -1,4 +1,4 @@
-torchrun --nproc_per_node=1 src/gpt2_ft.py \
+torchrun --nproc_per_node=1 src/main.py \
     --train_data ./data/e2e/train.jsonl \
     --valid_data ./data/e2e/valid.jsonl \
     --train_batch_size 8 \
