@@ -131,12 +131,13 @@ def encode (input, output, enc):
     writer.close()
 
 
-def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
+"""def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
     def collate_fn(batch):
         return collate_batch(batch, tokenizer, block_size)
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    return dataloader
+    return dataloader"""
+
 def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length=0):
 
     if max_context_length == 0:
@@ -154,7 +155,7 @@ def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length
     return pad_tokens, token_len
 
 
-class FT_Dataset(Dataset):
+"""class FT_Dataset(Dataset):
     def __init__(self, ft_file, batch_size, max_seq_length, 
                  max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0, 
                  prefix_cursor=1000000, infix_cursor=2000000):
@@ -221,6 +222,66 @@ class FT_Dataset(Dataset):
                 context = items['context']
                 completion = items['completion']
                 
+                ft_samples.append([context, completion])
+        return ft_samples"""
+
+class FT_Dataset(Dataset):
+    def __init__(self, ft_file, batch_size, max_seq_length, max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0, prefix_cursor=1000000, infix_cursor=2000000):
+        self.ft_file = ft_file
+        self.ft_samples = self.read_ft_file(ft_file)
+        self.batch_size = batch_size
+        self.num_examples = len(self.ft_samples)
+        self.max_seq_length = max_seq_length
+        self.max_eval_length = max_eval_length
+        self.joint_lm = joint_lm
+        self.prefix_len = prefix_len
+        self.infix_len = infix_len
+        self.prefix_cursor = prefix_cursor
+        self.infix_cursor = infix_cursor
+
+    # Changed this method to return the correct number of examples
+    def __len__(self):
+        return self.num_examples
+
+    def __getitem__(self, item):
+        example = self.ft_samples[item]
+        context = example[0]
+        completion = example[1]
+        pretokens = [i + self.prefix_cursor for i in range(0, self.prefix_len)]
+        intokens = [i + self.infix_cursor for i in range(0, self.infix_len)]
+
+        conditions = pretokens + context + intokens
+        _input, _input_len = padding_tokens(conditions + completion, self.max_seq_length, 0, 1)
+
+        pad_targets = [0 for i in range(0, self.prefix_len)] + context + [0 for i in range(0, self.infix_len)] + completion
+        _target, _ = padding_tokens(pad_targets, self.max_seq_length, 0, 1)
+        if not self.joint_lm:
+            _msk = [0.0] * (len(conditions) - 1) + [1.0] * (_input_len - len(conditions))
+        else:
+            _msk = [1.0] * (_input_len - 1)
+
+        _msk, _ = padding_tokens(_msk, self.max_seq_length, 0.0, 1)
+
+        output = {}
+        output["id"] = torch.tensor(item, dtype=torch.long)
+        _query, _query_len = padding_tokens(
+            conditions, self.max_seq_length, 0, -1,
+            max_context_length=self.max_seq_length - self.max_eval_length
+        )
+        output["query"] = torch.tensor(_query, dtype=torch.long)
+        output["query_len"] = torch.tensor(_query_len, dtype=torch.long)
+        output["input"] = torch.tensor(_input, dtype=torch.long)
+        output["target"] = torch.tensor(_target, dtype=torch.long)
+        output["mask"] = torch.tensor(_msk, dtype=torch.float)
+        return output
+
+    def read_ft_file(self, ft_file):
+        ft_samples = []
+        with open(ft_file, 'r') as reader:
+            for line in reader:
+                items = json.loads(line.strip())
+                context = items['context']
+                completion = items['completion']
                 ft_samples.append([context, completion])
         return ft_samples
 
@@ -320,6 +381,7 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
     return losses
 
 
+
 def main(args) -> None:
     global tokenizer
 
@@ -329,7 +391,7 @@ def main(args) -> None:
         table.add_row([i, get_model_name(i)])
     logger.info(f"\n{table}")
     format_convert("./data/train.txt", "./data/train_formatted.jsonl")
-    format_convert("./data/test_small.txt", "./data/test_formatted.jsonl")
+    format_convert("./data/test.txt", "./data/test_formatted.jsonl")
 
     model_name = get_model_name(args.model_id)
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
