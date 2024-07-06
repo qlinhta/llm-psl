@@ -71,18 +71,18 @@ Nuclear norm regularization is used to promote low-rank solutions by penalizing 
 - **Convex Relaxation**: The nuclear norm provides a convex relaxation for the rank function, making it tractable to optimize.
 
 **Mathematical Formulation**:
-Given the matrix \( W_0 \) and the update \( \Delta W = BA \), we add a nuclear norm regularization term to the loss function:
+Given the matrix $W_0$ and the update \( \Delta W = BA \), we add a nuclear norm regularization term to the loss function:
 
 1. **Loss Function**:
-   \[
+   $$
    \mathcal{L}(W_0 + BA) + \lambda \|BA\|_*
-   \]
+   $$
 
 2. **Nuclear Norm**:
-   \[
+   $$
    \|BA\|_* = \sum_{i=1}^{\min(d,k)} \sigma_i(BA)
-   \]
-   where \( \sigma_i(BA) \) are the singular values of \( BA \).
+   $$
+   where $\sigma_i(BA)$ are the singular values of \( BA \).
 
 3. **Optimization**:
     - Use proximal gradient methods to handle the non-smooth nuclear norm term.

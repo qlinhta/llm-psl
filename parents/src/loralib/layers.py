@@ -308,10 +308,6 @@ class Conv3d(ConvLoRA):
     def __init__(self, *args, **kwargs):
         super(Conv3d, self).__init__(nn.Conv3d, *args, **kwargs)"""
 
-#  ------------------------------------------------------------------------------------------
-#  Copyright (c) Microsoft Corporation. All rights reserved.
-#  Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
-#  ------------------------------------------------------------------------------------------
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -319,115 +315,90 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List
 
-class LoRALayer():
-    def __init__(
-        self, 
-        r: int, 
-        lora_alpha: int, 
-        lora_dropout: float,
-        merge_weights: bool,
-    ):
+class LoRALayer:
+    def __init__(self, r: int, lora_alpha: int, lora_dropout: float, merge_weights: bool, weight_matrix: Optional[torch.Tensor] = None):
         self.r = r
         self.lora_alpha = lora_alpha
-        # Optional dropout
-        if lora_dropout > 0.:
-            self.lora_dropout = nn.Dropout(p=lora_dropout)
-        else:
-            self.lora_dropout = lambda x: x
-        # Mark the weight as unmerged
+        self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0. else lambda x: x
         self.merged = False
         self.merge_weights = merge_weights
+        self.importance_threshold = 0.1
+        self.max_rank = self.auto_choose_max_rank(weight_matrix) if weight_matrix is not None else 16
+        print(f"Initial max rank chosen: {self.max_rank}")
 
     def calculate_adaptive_scaling(self, grad_A, grad_B, epsilon=1e-8):
         if grad_A is None or grad_B is None:
             return self.lora_alpha / self.r
         norm_A = torch.norm(grad_A, p='fro')
         norm_B = torch.norm(grad_B, p='fro')
-        adaptive_scaling = (self.lora_alpha / self.r) * (norm_A + norm_B) / (norm_A + norm_B + epsilon)
-        return adaptive_scaling
+        return (self.lora_alpha / self.r) * (norm_A + norm_B) / (norm_A + norm_B + epsilon)
+
+    def adjust_rank(self, grad_A, grad_B):
+        if self.r > 0:
+            importance = (torch.norm(grad_A, p='fro') + torch.norm(grad_B, p='fro')) / 2
+            old_r = self.r
+            if importance < self.importance_threshold:
+                self.r = max(1, self.r - 1)
+            elif self.r < self.max_rank:
+                self.r += 1
+            if self.r != old_r:
+                print(f"Rank adjusted from {old_r} to {self.r}")
+
+    def auto_choose_max_rank(self, weight_matrix, variance_threshold=0.95):
+        with torch.no_grad():
+            u, s, v = torch.svd(weight_matrix)
+            cumulative_variance_explained = torch.cumsum(s ** 2, dim=0) / torch.sum(s ** 2)
+            max_rank = torch.searchsorted(cumulative_variance_explained, variance_threshold).item() + 1
+        return max_rank
 
 
 class Embedding(nn.Embedding, LoRALayer):
-    # LoRA implemented in an embedding layer
-    def __init__(
-        self,
-        num_embeddings: int,
-        embedding_dim: int,
-        r: int = 0,
-        lora_alpha: int = 1,
-        merge_weights: bool = True,
-        **kwargs
-    ):
+    def __init__(self, num_embeddings: int, embedding_dim: int, r: int = 0, lora_alpha: int = 1, merge_weights: bool = True, **kwargs):
         nn.Embedding.__init__(self, num_embeddings, embedding_dim, **kwargs)
         LoRALayer.__init__(self, r=r, lora_alpha=lora_alpha, lora_dropout=0, merge_weights=merge_weights)
-        # Actual trainable parameters
         if r > 0:
             self.lora_A = nn.Parameter(self.weight.new_zeros((r, num_embeddings)))
             self.lora_B = nn.Parameter(self.weight.new_zeros((embedding_dim, r)))
             self.scaling = self.lora_alpha / self.r
-            # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
         self.reset_parameters()
 
     def reset_parameters(self):
         nn.Embedding.reset_parameters(self)
         if hasattr(self, 'lora_A'):
-            # initialize A the same way as the default for nn.Linear and B to zero
             nn.init.zeros_(self.lora_A)
             nn.init.normal_(self.lora_B)
 
     def train(self, mode: bool = True):
         nn.Embedding.train(self, mode)
-        if mode:
-            if self.merge_weights and self.merged:
-                # Make sure that the weights are not merged
-                if self.r > 0:
-                    self.weight.data -= (self.lora_B @ self.lora_A).transpose(0, 1) * self.scaling
-                self.merged = False
-        else:
-            if self.merge_weights and not self.merged:
-                # Merge the weights and mark it
-                if self.r > 0:
-                    self.weight.data += (self.lora_B @ self.lora_A).transpose(0, 1) * self.scaling
-                self.merged = True
-        
+        if mode and self.merge_weights and self.merged:  # Changed
+            if self.r > 0:
+                self.weight.data -= (self.lora_B @ self.lora_A).transpose(0, 1) * self.scaling
+            self.merged = False
+        elif not mode and self.merge_weights and not self.merged:  # Changed
+            if self.r > 0:
+                self.weight.data += (self.lora_B @ self.lora_A).transpose(0, 1) * self.scaling
+            self.merged = True
+
     def forward(self, x: torch.Tensor):
         if self.r > 0 and not self.merged:
             result = nn.Embedding.forward(self, x)
-            after_A = F.embedding(
-                x, self.lora_A.transpose(0, 1), self.padding_idx, self.max_norm,
-                self.norm_type, self.scale_grad_by_freq, self.sparse
-            )
+            after_A = F.embedding(x, self.lora_A.transpose(0, 1), self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
             adaptive_scaling = self.calculate_adaptive_scaling(self.lora_A.grad, self.lora_B.grad)
-            result += (after_A @ self.lora_B.transpose(0, 1)) * adaptive_scaling
-            return result
-        else:
-            return nn.Embedding.forward(self, x)
+            self.adjust_rank(self.lora_A.grad, self.lora_B.grad)  # Added
+            return result + (after_A @ self.lora_B.transpose(0, 1)) * adaptive_scaling
+        return nn.Embedding.forward(self, x)
             
 
 class Linear(nn.Linear, LoRALayer):
-    # LoRA implemented in a dense layer
-    def __init__(
-        self, 
-        in_features: int, 
-        out_features: int, 
-        r: int = 0, 
-        lora_alpha: int = 1, 
-        lora_dropout: float = 0.,
-        fan_in_fan_out: bool = False, # Set this to True if the layer to replace stores weight like (fan_in, fan_out)
-        merge_weights: bool = True,
-        **kwargs
-    ):
+    def __init__(self, in_features: int, out_features: int, r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0., fan_in_fan_out: bool = False, merge_weights: bool = True, **kwargs):
         nn.Linear.__init__(self, in_features, out_features, **kwargs)
         LoRALayer.__init__(self, r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout, merge_weights=merge_weights)
-
         self.fan_in_fan_out = fan_in_fan_out
-        # Actual trainable parameters
         if r > 0:
             self.lora_A = nn.Parameter(self.weight.new_zeros((r, in_features)))
             self.lora_B = nn.Parameter(self.weight.new_zeros((out_features, r)))
             self.scaling = self.lora_alpha / self.r
-            # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
         self.reset_parameters()
         if fan_in_fan_out:
@@ -436,7 +407,6 @@ class Linear(nn.Linear, LoRALayer):
     def reset_parameters(self):
         nn.Linear.reset_parameters(self)
         if hasattr(self, 'lora_A'):
-            # initialize B the same way as the default for nn.Linear and A to zero
             nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
             nn.init.zeros_(self.lora_B)
 
@@ -444,29 +414,25 @@ class Linear(nn.Linear, LoRALayer):
         def T(w):
             return w.transpose(0, 1) if self.fan_in_fan_out else w
         nn.Linear.train(self, mode)
-        if mode:
-            if self.merge_weights and self.merged:
-                # Make sure that the weights are not merged
-                if self.r > 0:
-                    self.weight.data -= T(self.lora_B @ self.lora_A) * self.scaling
-                self.merged = False
-        else:
-            if self.merge_weights and not self.merged:
-                # Merge the weights and mark it
-                if self.r > 0:
-                    self.weight.data += T(self.lora_B @ self.lora_A) * self.scaling
-                self.merged = True       
+        if mode and self.merge_weights and self.merged:  # Changed
+            if self.r > 0:
+                self.weight.data -= T(self.lora_B @ self.lora_A) * self.scaling
+            self.merged = False
+        elif not mode and self.merge_weights and not self.merged:  # Changed
+            if self.r > 0:
+                self.weight.data += T(self.lora_B @ self.lora_A) * self.scaling
+            self.merged = True
 
     def forward(self, x: torch.Tensor):
         def T(w):
             return w.transpose(0, 1) if self.fan_in_fan_out else w
         if self.r > 0 and not self.merged:
-            result = F.linear(x, T(self.weight), bias=self.bias)            
+            result = F.linear(x, T(self.weight), bias=self.bias)
             adaptive_scaling = self.calculate_adaptive_scaling(self.lora_A.grad, self.lora_B.grad)
-            result += (self.lora_dropout(x) @ self.lora_A.transpose(0, 1) @ self.lora_B.transpose(0, 1)) * adaptive_scaling
-            return result
-        else:
-            return F.linear(x, T(self.weight), bias=self.bias)
+            self.adjust_rank(self.lora_A.grad, self.lora_B.grad)  # Added
+            return result + (self.lora_dropout(x) @ self.lora_A.transpose(0, 1) @ self.lora_B.transpose(0, 1)) * adaptive_scaling
+        return F.linear(x, T(self.weight), bias=self.bias)
+
 
 
 class MergedLinear(nn.Linear, LoRALayer):
