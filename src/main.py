@@ -218,7 +218,7 @@ def main(args) -> None:
 
     table = PrettyTable()
     table.field_names = ["ID", "Model Name"]
-    for i in range(1, 10):
+    for i in range(1, 5):
         table.add_row([i, get_model_name(i)])
     logger.info(f"\n{table}")
 

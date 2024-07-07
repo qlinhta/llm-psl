@@ -21,7 +21,6 @@ import io
 import json
 import pandas as pd
 
-
 plt.style.use('default')
 plt.rc('font', family='sans-serif', size=14)
 plt.rc('axes', titlesize=14, labelsize=14)
@@ -57,17 +56,19 @@ def setup_logger(name):
 
 logger = setup_logger(__name__)
 
+
 def format_convert(read_file, write_file):
     with open(read_file, "r", encoding="utf8") as reader, \
-    	 open(write_file, "w", encoding="utf8") as writer :
-    	for line in reader:
-    		items = line.strip().split("||")
-    		context = items[0]
-    		completion = items[1].strip("\n")
-    		x = {}
-    		x["context"] = context
-    		x["completion"] = completion
-    		writer.write(json.dumps(x)+"\n")
+            open(write_file, "w", encoding="utf8") as writer:
+        for line in reader:
+            items = line.strip().split("||")
+            context = items[0]
+            completion = items[1].strip("\n")
+            x = {}
+            x["context"] = context
+            x["completion"] = completion
+            writer.write(json.dumps(x) + "\n")
+
 
 def get_model_name(model_id):
     model_mapping = {
@@ -103,7 +104,9 @@ def collate_batch(batch, tokenizer, block_size):
     return tokens, labels, targets
 
 """
-def encode (input, output, enc):
+
+
+def encode(input, output, enc):
     writer = open(output, 'w')
     add_bos = True
     add_eos = True
@@ -116,7 +119,7 @@ def encode (input, output, enc):
 
             bos = 50256
             eos = 50256
-            context_bpes= enc.encode(context)
+            context_bpes = enc.encode(context)
             context_bpes += [bos] if add_bos else []
 
             completion_bpes = enc.encode(' ' + completion)
@@ -124,21 +127,22 @@ def encode (input, output, enc):
 
             ft_json = {}
             ft_json['context'] = context_bpes
-            ft_json['completion'] = completion_bpes 
-            writer.write(json.dumps(ft_json)+'\n')
+            ft_json['completion'] = completion_bpes
+            writer.write(json.dumps(ft_json) + '\n')
 
             line_idx += 1
     writer.close()
 
 
-def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
+"""def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
     def collate_fn(batch):
         return collate_batch(batch, tokenizer, block_size)
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    return dataloader
-def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length=0):
+    return dataloader"""
 
+
+def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length=0):
     if max_context_length == 0:
         max_context_length = max_seq_length
 
@@ -155,8 +159,8 @@ def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length
 
 
 class FT_Dataset(Dataset):
-    def __init__(self, ft_file, batch_size, max_seq_length, 
-                 max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0, 
+    def __init__(self, ft_file, batch_size, max_seq_length,
+                 max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0,
                  prefix_cursor=1000000, infix_cursor=2000000):
         self.ft_file = ft_file
         self.ft_samples = self.read_ft_file(ft_file)
@@ -166,7 +170,7 @@ class FT_Dataset(Dataset):
         self.max_eval_length = max_eval_length
         self.joint_lm = joint_lm
 
-        self.num_batches = int((self.num_examples + self.batch_size - 1) / self.batch_size) 
+        self.num_batches = int((self.num_examples + self.batch_size - 1) / self.batch_size)
 
         self.prefix_len = prefix_len
         self.infix_len = infix_len
@@ -175,20 +179,21 @@ class FT_Dataset(Dataset):
 
     def __len__(self):
         return self.num_batches * self.batch_size
-        
+
     def __getitem__(self, item):
 
         example = self.ft_samples[item]
         context = example[0]
         completion = example[1]
-        pretokens = [i + self.prefix_cursor for i in range(0, self.prefix_len)] 
-        intokens = [i + self.infix_cursor for i in range(0, self.infix_len)] 
+        pretokens = [i + self.prefix_cursor for i in range(0, self.prefix_len)]
+        intokens = [i + self.infix_cursor for i in range(0, self.infix_len)]
 
-        conditions = pretokens + context + intokens 
+        conditions = pretokens + context + intokens
         _input, _input_len = padding_tokens(conditions + completion, self.max_seq_length, 0, 1)
 
-        pad_targets = [0 for i in range(0, self.prefix_len)] + context + [0 for i in range(0, self.infix_len)] + completion
-        #_target, _ = padding_tokens(pad_targets[1:], self.max_seq_length, 0, 1)
+        pad_targets = [0 for i in range(0, self.prefix_len)] + context + [0 for i in
+                                                                          range(0, self.infix_len)] + completion
+        # _target, _ = padding_tokens(pad_targets[1:], self.max_seq_length, 0, 1)
         _target, _ = padding_tokens(pad_targets, self.max_seq_length, 0, 1)
         if not self.joint_lm:
             _msk = [0.0] * (len(conditions) - 1) + [1.0] * (_input_len - len(conditions))
@@ -196,19 +201,19 @@ class FT_Dataset(Dataset):
             _msk = [1.0] * (_input_len - 1)
 
         _msk, _ = padding_tokens(_msk, self.max_seq_length, 0.0, 1)
-        
+
         output = {}
         output["id"] = torch.tensor(item, dtype=torch.long)
-        
+
         _query, _query_len = padding_tokens(
-            conditions, self.max_seq_length, 0, -1, 
-            max_context_length = self.max_seq_length - self.max_eval_length
+            conditions, self.max_seq_length, 0, -1,
+            max_context_length=self.max_seq_length - self.max_eval_length
         )
         output["query"] = torch.tensor(_query, dtype=torch.long)
         output["query_len"] = torch.tensor(_query_len, dtype=torch.long)
 
-        output["input"] = torch.tensor(_input, dtype=torch.long) 
-        output["target"] = torch.tensor(_target, dtype=torch.long) 
+        output["input"] = torch.tensor(_input, dtype=torch.long)
+        output["target"] = torch.tensor(_target, dtype=torch.long)
 
         output["mask"] = torch.tensor(_msk, dtype=torch.float)
         return output
@@ -220,11 +225,9 @@ class FT_Dataset(Dataset):
                 items = json.loads(line.strip())
                 context = items['context']
                 completion = items['completion']
-                
+
                 ft_samples.append([context, completion])
         return ft_samples
-
-
 
 
 class LoRALinear(nn.Module):
@@ -296,8 +299,8 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
             masks = data['mask'].to(device)
             optimizer.zero_grad()
             with autocast(enabled=scaler is not None):
-                outputs = model( input_ids=inputs,
-                attention_mask=masks, labels=labels)
+                outputs = model(input_ids=inputs,
+                                attention_mask=masks, labels=labels)
                 loss = outputs.loss / grad_accum_steps
             running_loss += loss.item()
 
@@ -329,32 +332,33 @@ def main(args) -> None:
         table.add_row([i, get_model_name(i)])
     logger.info(f"\n{table}")
     format_convert("./data/train.txt", "./data/train_formatted.jsonl")
-    format_convert("./data/test_small.txt", "./data/test_formatted.jsonl")
+    format_convert("./data/test.txt", "./data/test_formatted.jsonl")
 
     model_name = get_model_name(args.model_id)
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
     tokenizer.pad_token = tokenizer.eos_token
+
     def read_json_file(file_path):
         with open(file_path, "r", encoding="utf8") as file:
             data = json.load(file)
             df = pd.DataFrame(data)
             return df
+
     encode('./data/train_formatted.jsonl', './data/train_formatted_token.jsonl', tokenizer)
     encode('./data/test_formatted.jsonl', './data/test_formatted_token.jsonl', tokenizer)
     train_data = FT_Dataset(
-        ft_file ='./data/train_formatted_token.jsonl', batch_size=args.batch_size, max_seq_length=30, joint_lm= True)
-    
-  
+        ft_file='./data/train_formatted_token.jsonl', batch_size=args.batch_size, max_seq_length=30, joint_lm=True)
+
     test_data = FT_Dataset(
         './data/test_formatted_token.jsonl', 1, 30,
     )
     train_dataloader = DataLoader(
-        train_data, batch_size=args.batch_size, num_workers=0,    
+        train_data, batch_size=args.batch_size, num_workers=0,
     )
     test_dataloader = DataLoader(
-        test_data, batch_size=args.batch_size, num_workers=0, 
-        shuffle=False, pin_memory=False, drop_last=False,   
+        test_data, batch_size=args.batch_size, num_workers=0,
+        shuffle=False, pin_memory=False, drop_last=False,
     )
     logger.info(f"Attempting to load model: {model_name}")
     lora_model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
@@ -368,36 +372,36 @@ def main(args) -> None:
     preds, labels = [], []
     progress_bar = tqdm(total=len(test_dataloader), desc="Evaluating")
     for batch in test_dataloader:
-      data = {key: value for key, value in batch.items()}
-      inputs = data['input'].to(device)
-      targets = data['target'].to(device)
-      masks = data['mask'].to(device)
-      input_texts = [tokenizer.decode(inputs[i], skip_special_tokens=True) for i in
+        data = {key: value for key, value in batch.items()}
+        inputs = data['input'].to(device)
+        targets = data['target'].to(device)
+        masks = data['mask'].to(device)
+        input_texts = [tokenizer.decode(inputs[i], skip_special_tokens=True) for i in
                        range(len(inputs))]
-      targets= [tokenizer.decode(targets[i], skip_special_tokens=True) for i in
-                       range(len(targets))]
-      logger.info(f"Input: {input_texts[0]}")
-      logger.info(f"Target: {targets[0]}")
-      with torch.no_grad():
-        input_len = int(torch.sum(masks).cpu().numpy())
-        print(input_len)
-        print(masks)
-        output = lora_model.generate(inputs, max_new_tokens=30,
+        targets = [tokenizer.decode(targets[i], skip_special_tokens=True) for i in
+                   range(len(targets))]
+        logger.info(f"Input: {input_texts[0]}")
+        logger.info(f"Target: {targets[0]}")
+        with torch.no_grad():
+            input_len = int(torch.sum(masks).cpu().numpy())
+            print(input_len)
+            print(masks)
+            output = lora_model.generate(inputs, max_new_tokens=30,
                                          attention_mask=masks,
                                          pad_token_id=tokenizer.eos_token_id,
                                          do_sample=False,
                                          temperature=0.9,
                                          top_k=40)
-        logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
-
-        pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
-      
-        logger.info(f"Prediction: {pred_texts}")
-        preds.extend(pred_texts)
-        labels.extend(targets)
-        progress_bar.update(1)
+            # logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+            # pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
+            # logger.info(f"Prediction: {pred_texts}")
+            pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
+            logger.info(f"Prediction: {pred_texts}")
+            preds.extend(pred_texts)
+            labels.extend(targets)
+            progress_bar.update(1)
     progress_bar.close()
-  
+
     bleu = compute_bleu(preds, labels)
     meteor = compute_meteor(preds, labels)
     rouge_l = compute_rouge_l(preds, labels)
