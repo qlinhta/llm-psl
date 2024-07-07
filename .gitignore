@@ -1,6 +1,6 @@
 .idea
 llm
 homework
-loralib/pretrained_checkpoints
+src/loralib/pretrained_checkpoints
 saved_model
-loralib/trained_models
+src/loralib/trained_models

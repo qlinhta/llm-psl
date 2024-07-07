@@ -3,7 +3,6 @@ import time
 import math
 import os
 import sys
-import numpy as np
 import itertools
 
 import torch
@@ -14,14 +13,12 @@ torch.set_printoptions(threshold=100000)
 from gpu import (
     add_gpu_params, 
     parse_gpu, 
-    distributed_opt, 
-    distributed_gather, 
-    distributed_sync, 
+    distributed_opt,
+    distributed_sync,
     cleanup
 )
 from optimizer import (
-    create_adam_optimizer, 
-    create_optimizer_scheduler, 
+    create_optimizer_scheduler,
     add_optimizer_params, 
     create_adam_optimizer_from_args
 )
@@ -31,7 +28,7 @@ from model import GPT2Config, GPT2LMModel
 from exp_utils import create_exp_dir
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'loralib'))
-import loralib as lora
+from src.loralib.src import loralib as lora
 
 parser = argparse.ArgumentParser(description='PyTorch GPT2 ft script')
 
