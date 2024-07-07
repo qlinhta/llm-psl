@@ -1,4 +1,3 @@
-import os
 import argparse
 import numpy as np
 import math
@@ -11,6 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, AdamW
 from prettytable import PrettyTable
 from torch.cuda.amp import GradScaler, autocast
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import logging
 from colorlog import ColoredFormatter
 from huggingface_hub import login
@@ -20,6 +20,8 @@ import sys
 import io
 import json
 import pandas as pd
+import random
+import os
 
 plt.style.use('default')
 plt.rc('font', family='sans-serif', size=14)
@@ -56,19 +58,18 @@ def setup_logger(name):
 
 logger = setup_logger(__name__)
 
-
 def format_convert(read_file, write_file):
     with open(read_file, "r", encoding="utf8") as reader, \
             open(write_file, "w", encoding="utf8") as writer:
         for line in reader:
             items = line.strip().split("||")
+            if len(items) < 2:
+                logger.error(f"Line is not properly formatted: {line}")
+                continue
             context = items[0]
             completion = items[1].strip("\n")
-            x = {}
-            x["context"] = context
-            x["completion"] = completion
+            x = {"context": context, "completion": completion}
             writer.write(json.dumps(x) + "\n")
-
 
 def get_model_name(model_id):
     model_mapping = {
@@ -93,20 +94,8 @@ def device() -> torch.device:
 device = device()
 logger.info(f"Using device: {device}")
 
-"""
-def collate_batch(batch, tokenizer, block_size):
-    texts = [item['text'] for item in batch]
-    targets = [item['target'] for item in batch]
-    tokens = tokenizer(texts, padding='max_length', truncation=True, max_length=block_size, return_tensors="pt")
-    tokens = {key: val.to(device) for key, val in tokens.items()}
-    labels = tokens["input_ids"].clone()
-    labels[labels == tokenizer.pad_token_id] = -100
-    return tokens, labels, targets
 
-"""
-
-
-def encode(input, output, enc):
+def encode (input, output, enc):
     writer = open(output, 'w')
     add_bos = True
     add_eos = True
@@ -119,7 +108,7 @@ def encode(input, output, enc):
 
             bos = 50256
             eos = 50256
-            context_bpes = enc.encode(context)
+            context_bpes= enc.encode(context)
             context_bpes += [bos] if add_bos else []
 
             completion_bpes = enc.encode(' ' + completion)
@@ -128,21 +117,13 @@ def encode(input, output, enc):
             ft_json = {}
             ft_json['context'] = context_bpes
             ft_json['completion'] = completion_bpes
-            writer.write(json.dumps(ft_json) + '\n')
+            writer.write(json.dumps(ft_json)+'\n')
 
             line_idx += 1
     writer.close()
 
-
-"""def create_dataloader(dataset, tokenizer, batch_size=32, block_size=512):
-    def collate_fn(batch):
-        return collate_batch(batch, tokenizer, block_size)
-
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    return dataloader"""
-
-
 def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length=0):
+
     if max_context_length == 0:
         max_context_length = max_seq_length
 
@@ -159,9 +140,7 @@ def padding_tokens(tokens, max_seq_length, pad_token, direct, max_context_length
 
 
 class FT_Dataset(Dataset):
-    def __init__(self, ft_file, batch_size, max_seq_length,
-                 max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0,
-                 prefix_cursor=1000000, infix_cursor=2000000):
+    def __init__(self, ft_file, batch_size, max_seq_length, max_eval_length=0, joint_lm=False, prefix_len=0, infix_len=0, prefix_cursor=1000000, infix_cursor=2000000):
         self.ft_file = ft_file
         self.ft_samples = self.read_ft_file(ft_file)
         self.batch_size = batch_size
@@ -169,19 +148,15 @@ class FT_Dataset(Dataset):
         self.max_seq_length = max_seq_length
         self.max_eval_length = max_eval_length
         self.joint_lm = joint_lm
-
-        self.num_batches = int((self.num_examples + self.batch_size - 1) / self.batch_size)
-
         self.prefix_len = prefix_len
         self.infix_len = infix_len
         self.prefix_cursor = prefix_cursor
         self.infix_cursor = infix_cursor
 
     def __len__(self):
-        return self.num_batches * self.batch_size
+        return self.num_examples
 
     def __getitem__(self, item):
-
         example = self.ft_samples[item]
         context = example[0]
         completion = example[1]
@@ -191,9 +166,7 @@ class FT_Dataset(Dataset):
         conditions = pretokens + context + intokens
         _input, _input_len = padding_tokens(conditions + completion, self.max_seq_length, 0, 1)
 
-        pad_targets = [0 for i in range(0, self.prefix_len)] + context + [0 for i in
-                                                                          range(0, self.infix_len)] + completion
-        # _target, _ = padding_tokens(pad_targets[1:], self.max_seq_length, 0, 1)
+        pad_targets = [0 for i in range(0, self.prefix_len)] + context + [0 for i in range(0, self.infix_len)] + completion
         _target, _ = padding_tokens(pad_targets, self.max_seq_length, 0, 1)
         if not self.joint_lm:
             _msk = [0.0] * (len(conditions) - 1) + [1.0] * (_input_len - len(conditions))
@@ -204,17 +177,14 @@ class FT_Dataset(Dataset):
 
         output = {}
         output["id"] = torch.tensor(item, dtype=torch.long)
-
         _query, _query_len = padding_tokens(
             conditions, self.max_seq_length, 0, -1,
             max_context_length=self.max_seq_length - self.max_eval_length
         )
         output["query"] = torch.tensor(_query, dtype=torch.long)
         output["query_len"] = torch.tensor(_query_len, dtype=torch.long)
-
         output["input"] = torch.tensor(_input, dtype=torch.long)
         output["target"] = torch.tensor(_target, dtype=torch.long)
-
         output["mask"] = torch.tensor(_msk, dtype=torch.float)
         return output
 
@@ -225,7 +195,6 @@ class FT_Dataset(Dataset):
                 items = json.loads(line.strip())
                 context = items['context']
                 completion = items['completion']
-
                 ft_samples.append([context, completion])
         return ft_samples
 
@@ -283,12 +252,13 @@ def params(model: nn.Module) -> None:
 def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size: int = 8, learning_rate: float = 1e-5,
           grad_accum_steps: int = 4) -> list:
     optimizer = AdamW(model.parameters(), lr=learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs * len(dataloader))
     scaler = GradScaler() if device.type == 'cuda' else None
     model.train()
     losses = []
 
     for epoch in range(epochs):
-        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {learning_rate}")
+        logger.info(f"EPOCH: {epoch + 1}/{epochs} started with learning rate: {scheduler.get_last_lr()[0]}")
         running_loss = 0.0
         progress_bar = tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch + 1}/{epochs}")
 
@@ -299,8 +269,8 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
             masks = data['mask'].to(device)
             optimizer.zero_grad()
             with autocast(enabled=scaler is not None):
-                outputs = model(input_ids=inputs,
-                                attention_mask=masks, labels=labels)
+                outputs = model( input_ids=inputs,
+                                 attention_mask=masks, labels=labels)
                 loss = outputs.loss / grad_accum_steps
             running_loss += loss.item()
 
@@ -316,11 +286,14 @@ def train(model: nn.Module, dataloader: DataLoader, epochs: int = 1, batch_size:
                     optimizer.step()
                     optimizer.zero_grad()
 
+            scheduler.step()
+
             avg_loss = running_loss / (idx + 1)
             progress_bar.set_postfix({'Loss': f"{loss.item() * grad_accum_steps:.4f}", 'Avg Loss': f"{avg_loss:.4f}"})
         losses.append(avg_loss)
 
     return losses
+
 
 
 def main(args) -> None:
@@ -338,17 +311,16 @@ def main(args) -> None:
     logger.info(f"Selected model ID: {args.model_id}, Model Name: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
     tokenizer.pad_token = tokenizer.eos_token
-
     def read_json_file(file_path):
         with open(file_path, "r", encoding="utf8") as file:
             data = json.load(file)
             df = pd.DataFrame(data)
             return df
-
     encode('./data/train_formatted.jsonl', './data/train_formatted_token.jsonl', tokenizer)
     encode('./data/test_formatted.jsonl', './data/test_formatted_token.jsonl', tokenizer)
     train_data = FT_Dataset(
-        ft_file='./data/train_formatted_token.jsonl', batch_size=args.batch_size, max_seq_length=30, joint_lm=True)
+        ft_file ='./data/train_formatted_token.jsonl', batch_size=args.batch_size, max_seq_length=30, joint_lm= True)
+
 
     test_data = FT_Dataset(
         './data/test_formatted_token.jsonl', 1, 30,
@@ -378,14 +350,14 @@ def main(args) -> None:
         masks = data['mask'].to(device)
         input_texts = [tokenizer.decode(inputs[i], skip_special_tokens=True) for i in
                        range(len(inputs))]
-        targets = [tokenizer.decode(targets[i], skip_special_tokens=True) for i in
-                   range(len(targets))]
-        logger.info(f"Input: {input_texts[0]}")
-        logger.info(f"Target: {targets[0]}")
+        targets= [tokenizer.decode(targets[i], skip_special_tokens=True) for i in
+                  range(len(targets))]
+        # logger.info(f"Input: {input_texts[0]}")
+        # logger.info(f"Target: {targets[0]}")
         with torch.no_grad():
-            input_len = int(torch.sum(masks).cpu().numpy())
-            print(input_len)
-            print(masks)
+            # input_len = int(torch.sum(masks).cpu().numpy())
+            # print(input_len)
+            # print(masks)
             output = lora_model.generate(inputs, max_new_tokens=30,
                                          attention_mask=masks,
                                          pad_token_id=tokenizer.eos_token_id,
@@ -393,8 +365,6 @@ def main(args) -> None:
                                          temperature=0.9,
                                          top_k=40)
             # logger.info(f"Output: {tokenizer.decode(output[0], skip_special_tokens=True)}")
-            # pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
-            # logger.info(f"Prediction: {pred_texts}")
             pred_texts = [tokenizer.decode(o, skip_special_tokens=True).split('.')[0] for o in output]
             logger.info(f"Prediction: {pred_texts}")
             preds.extend(pred_texts)
