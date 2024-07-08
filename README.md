@@ -31,13 +31,7 @@ modularity and ease of use, allowing for easy downloading, preprocessing, and tr
 | 8        | Gemma-2-9B       | 9B           |
 | 9        | Gemma-2-27B      | 27B          |
 
-Running with GPT-2 Model on AG News Dataset:
-
-```bash
-python3 ./src/ag.py --model_id 1 --train_file ./data/train.csv --test_file ./data/test.csv --epochs 5 --batch_size 8 --learning_rate 1e-5 --grad_accum_steps 4 --lora_dim 8
-```
-
 Running with Models on E2E Dataset:
 
 ```bash
-python3 ./src/e2e.py --train_limit 50 --eval_limit 10 --model_id 1 --epochs 5 --batch_size 8 --learning_rate 1e-5 --grad_accum_steps 4 --lora_dim 8```
+python3 ./src/run.py --train_limit [N] --eval_limit [N] --model_id [id] --epochs [ep] --batch_size [b] --learning_rate [lr] --grad_accum_steps [grad] --lora_dim [dim]```
